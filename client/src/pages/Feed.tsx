@@ -354,8 +354,7 @@ export default function Feed() {
         return (
             <div className="min-h-screen flex items-center justify-center" style={{ background: colors.gray900 }}>
                 <div className="text-center max-w-md mx-auto p-6">
-                    <img src="/assets/frequency-crown.png" alt="Frequency Factory" className="w-32 h-32 mx-auto mb-4" />
-                    <h1 className="font-primary text-3xl text-white mb-4">FREQUENCY FACTORY</h1>
+                    <h1 className="font-primary text-5xl text-white mb-4 tracking-wider">FREQUENCY FACTORY</h1>
                     <p className="text-gray-400 mb-6">Sign in to start certifying tracks</p>
                     <div className="space-y-4">
                         <button 
