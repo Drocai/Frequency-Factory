@@ -1,0 +1,257 @@
+/**
+ * Frequency Factory - Cosmic Design System
+ * 
+ * This file contains all the design tokens for the cosmic theme:
+ * - Color palette (cosmic backgrounds, frequency colors)
+ * - Token tier colors (Red, Blue, Purple, Gold)
+ * - Typography
+ * - Spacing and effects
+ */
+
+@layer base {
+  :root {
+    /* === COSMIC COLOR PALETTE === */
+    
+    /* Deep space backgrounds */
+    --cosmic-void: 0 0% 5%;           /* #0d0d0d - Deepest black */
+    --cosmic-deep: 240 10% 10%;        /* #171a1f - Dark blue-black */
+    --cosmic-space: 240 8% 15%;        /* #222630 - Space blue */
+    --cosmic-nebula: 270 15% 20%;      /* #2b2640 - Purple nebula */
+    
+    /* Accent glows */
+    --cosmic-glow-orange: 25 95% 53%;  /* #ff6b1a - Orange energy */
+    --cosmic-glow-blue: 210 100% 60%;  /* #3399ff - Blue energy */
+    --cosmic-glow-purple: 270 80% 60%; /* #9966ff - Purple energy */
+    --cosmic-glow-gold: 45 100% 50%;   /* #ffcc00 - Gold energy */
+    
+    /* === FREQUENCY TOKEN COLORS === */
+    
+    /* Red Frequency Token (Base Tier) */
+    --ft-red: 0 100% 50%;              /* #ff0000 */
+    --ft-red-glow: 0 100% 60%;         /* Lighter glow */
+    --ft-red-dark: 0 100% 40%;         /* Darker variant */
+    
+    /* Blue Frequency Token (Mid Tier) */
+    --ft-blue: 210 100% 50%;           /* #0077ff */
+    --ft-blue-glow: 210 100% 60%;      /* Lighter glow */
+    --ft-blue-dark: 210 100% 40%;      /* Darker variant */
+    
+    /* Purple Frequency Token (High Tier) */
+    --ft-purple: 270 100% 60%;         /* #9933ff */
+    --ft-purple-glow: 270 100% 70%;    /* Lighter glow */
+    --ft-purple-dark: 270 100% 50%;    /* Darker variant */
+    
+    /* Gold Frequency Token (Top Tier) */
+    --ft-gold: 45 100% 50%;            /* #ffcc00 */
+    --ft-gold-glow: 45 100% 60%;       /* Lighter glow */
+    --ft-gold-dark: 45 100% 40%;       /* Darker variant */
+    
+    /* === SEMANTIC COLORS (Override defaults) === */
+    
+    --background: var(--cosmic-void);
+    --foreground: 0 0% 95%;            /* Almost white text */
+    
+    --card: var(--cosmic-deep);
+    --card-foreground: 0 0% 90%;
+    
+    --popover: var(--cosmic-space);
+    --popover-foreground: 0 0% 95%;
+    
+    --primary: var(--cosmic-glow-orange);
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: var(--cosmic-glow-blue);
+    --secondary-foreground: 0 0% 100%;
+    
+    --muted: var(--cosmic-space);
+    --muted-foreground: 0 0% 60%;
+    
+    --accent: var(--cosmic-glow-purple);
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: var(--cosmic-space);
+    --input: var(--cosmic-space);
+    --ring: var(--cosmic-glow-orange);
+    
+    --radius: 0.5rem;
+  }
+}
+
+/* === COSMIC UTILITY CLASSES === */
+
+.cosmic-bg-void {
+  background-color: hsl(var(--cosmic-void));
+}
+
+.cosmic-bg-deep {
+  background-color: hsl(var(--cosmic-deep));
+}
+
+.cosmic-bg-space {
+  background-color: hsl(var(--cosmic-space));
+}
+
+.cosmic-bg-nebula {
+  background-color: hsl(var(--cosmic-nebula));
+}
+
+/* === FREQUENCY TOKEN CLASSES === */
+
+.ft-red {
+  color: hsl(var(--ft-red));
+}
+
+.ft-red-glow {
+  color: hsl(var(--ft-red-glow));
+  text-shadow: 0 0 10px hsl(var(--ft-red-glow)), 0 0 20px hsl(var(--ft-red-glow));
+}
+
+.ft-blue {
+  color: hsl(var(--ft-blue));
+}
+
+.ft-blue-glow {
+  color: hsl(var(--ft-blue-glow));
+  text-shadow: 0 0 10px hsl(var(--ft-blue-glow)), 0 0 20px hsl(var(--ft-blue-glow));
+}
+
+.ft-purple {
+  color: hsl(var(--ft-purple));
+}
+
+.ft-purple-glow {
+  color: hsl(var(--ft-purple-glow));
+  text-shadow: 0 0 10px hsl(var(--ft-purple-glow)), 0 0 20px hsl(var(--ft-purple-glow));
+}
+
+.ft-gold {
+  color: hsl(var(--ft-gold));
+}
+
+.ft-gold-glow {
+  color: hsl(var(--ft-gold-glow));
+  text-shadow: 0 0 10px hsl(var(--ft-gold-glow)), 0 0 20px hsl(var(--ft-gold-glow));
+}
+
+/* === COSMIC GLOW EFFECTS === */
+
+.cosmic-glow-orange {
+  box-shadow: 0 0 20px hsl(var(--cosmic-glow-orange)), 0 0 40px hsl(var(--cosmic-glow-orange));
+}
+
+.cosmic-glow-blue {
+  box-shadow: 0 0 20px hsl(var(--cosmic-glow-blue)), 0 0 40px hsl(var(--cosmic-glow-blue));
+}
+
+.cosmic-glow-purple {
+  box-shadow: 0 0 20px hsl(var(--cosmic-glow-purple)), 0 0 40px hsl(var(--cosmic-glow-purple));
+}
+
+.cosmic-glow-gold {
+  box-shadow: 0 0 20px hsl(var(--cosmic-glow-gold)), 0 0 40px hsl(var(--cosmic-glow-gold));
+}
+
+/* === ETHEREAL WAVEFORM GRADIENT === */
+
+.waveform-gradient {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--ft-red)) 0%,
+    hsl(var(--ft-purple)) 33%,
+    hsl(var(--ft-blue)) 66%,
+    hsl(var(--ft-gold)) 100%
+  );
+}
+
+.waveform-gradient-glow {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--ft-red-glow)) 0%,
+    hsl(var(--ft-purple-glow)) 33%,
+    hsl(var(--ft-blue-glow)) 66%,
+    hsl(var(--ft-gold-glow)) 100%
+  );
+  filter: blur(2px);
+}
+
+/* === COSMIC ANIMATIONS === */
+
+@keyframes pulse-cosmic {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 10px currentColor);
+  }
+  50% {
+    filter: brightness(1.3) drop-shadow(0 0 20px currentColor);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-pulse-cosmic {
+  animation: pulse-cosmic 2s ease-in-out infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* === STARFIELD BACKGROUND === */
+
+.starfield {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(2px 2px at 20% 30%, white, transparent),
+    radial-gradient(2px 2px at 60% 70%, white, transparent),
+    radial-gradient(1px 1px at 50% 50%, white, transparent),
+    radial-gradient(1px 1px at 80% 10%, white, transparent),
+    radial-gradient(2px 2px at 90% 60%, white, transparent),
+    radial-gradient(1px 1px at 33% 80%, white, transparent),
+    radial-gradient(2px 2px at 10% 90%, white, transparent);
+  background-size: 200% 200%;
+  background-position: 0% 0%;
+  opacity: 0.5;
+  z-index: -1;
+}
+
+/* === HEXAGONAL GRID PATTERN === */
+
+.hexagonal-grid {
+  background-image: 
+    linear-gradient(30deg, hsl(var(--cosmic-glow-orange) / 0.1) 12%, transparent 12.5%, transparent 87%, hsl(var(--cosmic-glow-orange) / 0.1) 87.5%, hsl(var(--cosmic-glow-orange) / 0.1)),
+    linear-gradient(150deg, hsl(var(--cosmic-glow-orange) / 0.1) 12%, transparent 12.5%, transparent 87%, hsl(var(--cosmic-glow-orange) / 0.1) 87.5%, hsl(var(--cosmic-glow-orange) / 0.1)),
+    linear-gradient(30deg, hsl(var(--cosmic-glow-orange) / 0.1) 12%, transparent 12.5%, transparent 87%, hsl(var(--cosmic-glow-orange) / 0.1) 87.5%, hsl(var(--cosmic-glow-orange) / 0.1)),
+    linear-gradient(150deg, hsl(var(--cosmic-glow-orange) / 0.1) 12%, transparent 12.5%, transparent 87%, hsl(var(--cosmic-glow-orange) / 0.1) 87.5%, hsl(var(--cosmic-glow-orange) / 0.1)),
+    linear-gradient(60deg, hsl(var(--cosmic-glow-blue) / 0.05) 25%, transparent 25.5%, transparent 75%, hsl(var(--cosmic-glow-blue) / 0.05) 75%, hsl(var(--cosmic-glow-blue) / 0.05)),
+    linear-gradient(60deg, hsl(var(--cosmic-glow-blue) / 0.05) 25%, transparent 25.5%, transparent 75%, hsl(var(--cosmic-glow-blue) / 0.05) 75%, hsl(var(--cosmic-glow-blue) / 0.05));
+  background-size: 80px 140px;
+  background-position: 0 0, 0 0, 40px 70px, 40px 70px, 0 0, 40px 70px;
+}
