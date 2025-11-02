@@ -76,3 +76,14 @@
 - [x] Test responsive design on mobile devices
 - [x] Verify prediction submission works on mobile
 - [x] Verify audio waveforms display correctly
+
+## Landing Page & Onboarding (PRIORITY)
+- [x] Create landing page with hero section (Frequency Factory crown logo, cosmic theme)
+- [x] Add "Begin Your Journey" button (blue, glowing)
+- [x] Add "Learn More" button
+- [x] Create scrollable onboarding sections:
+  - [x] "Meet QUENCY" section with AI guide intro
+  - [x] "Earn Tokens" section explaining the system
+  - [x] Token tiers section (Red FT, Blue FT, Purple FT, Gold FT with descriptions)
+- [x] Wire up "Begin Your Journey" to navigate to feed
+- [x] Update feed to match the actual design (proper track cards with artist images)
