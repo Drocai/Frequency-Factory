@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import './cosmic-design.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -79,8 +78,7 @@
   --sidebar-ring: oklch(0.623 0.214 259.815);
 }
 
-:root {
-  /* Cosmic theme overrides - using dark cosmic colors by default */
+.dark {
   --primary: var(--color-blue-700);
   --primary-foreground: var(--color-blue-50);
   --sidebar-primary: var(--color-blue-500);
@@ -113,12 +111,6 @@
   --sidebar-accent-foreground:  oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
-}
-
-.light {
-  /* Light theme (if needed) */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.235 0.015 65);
 }
 
 @layer base {
