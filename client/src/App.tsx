@@ -6,13 +6,22 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Landing from "./pages/Landing";
 import Feed from "./pages/Feed";
+import Discover from "./pages/Discover";
+import Submit from "./pages/Submit";
+import Profile from "./pages/Profile";
+import Rewards from "./pages/Rewards";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path={"/"} component={Landing} />
-      <Route path={"/feed"} component={Feed} />      <Route path={"/404"} component={NotFound} />
+      <Route path={"/feed"} component={Feed} />
+      <Route path={"/discover"} component={Discover} />
+      <Route path={"/submit"} component={Submit} />
+      <Route path={"/profile"} component={Profile} />
+      <Route path={"/rewards"} component={Rewards} />
+      <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>

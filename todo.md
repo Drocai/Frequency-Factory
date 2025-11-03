@@ -104,3 +104,13 @@
 - [ ] Implement gradient waveforms (orange→pink→purple→blue) matching mockup - WaveSurfer limitation
 - [x] Add certified gear badge (778FD033...png) for completed predictions
 - [x] Test complete prediction flow with new visuals
+
+## Complete App Features (PRIORITY)
+- [x] Build Discover page (browse tracks, filter by genre, search)
+- [x] Build Submit page (track upload form, audio file handling, S3 storage)
+- [x] Build Profile page (user stats, prediction history, token balance, achievements)
+- [x] Build Rewards page (leaderboard, token redemption, achievement badges)
+- [x] Add notification center (bell icon in header, activity feed dropdown)
+- [x] Implement QUENCY AI chat (floating button, using built-in LLM responses)
+- [ ] Replace demo mode with real Google OAuth (Supabase Auth) - OPTIONAL
+- [x] Test complete user journey from landing to all pages

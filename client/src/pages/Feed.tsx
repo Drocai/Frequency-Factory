@@ -8,6 +8,8 @@ import {
 import WaveSurfer from 'wavesurfer.js';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import NotificationCenter from '@/components/NotificationCenter';
+import QuencyChat from '@/components/QuencyChat';
 
 // Design system colors
 const colors = {
@@ -389,7 +391,8 @@ export default function Feed() {
                     <img src="/assets/frequency-crown.png" alt="Logo" className="w-8 h-8 mx-auto mb-1" />
                     <h1 className="font-primary text-xl text-white tracking-wider">FREQUENCY FACTORY</h1>
                 </div>
-                <TokenBalance balance={50} />
+                    <NotificationCenter />
+                    <TokenBalance balance={50} />
             </header>
 
             {/* Main Content */}
@@ -439,6 +442,9 @@ export default function Feed() {
                     <BottomNavItem icon={User} label="Profile" isActive={false} />
                 </div>
             </footer>
+
+            {/* QUENCY AI Chat */}
+            <QuencyChat />
         </div>
     );
 }
