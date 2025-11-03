@@ -50,8 +50,8 @@ const WaveSurferPlayer = React.memo(({ audioUrl, tierGradientStops }: { audioUrl
             barWidth: 2,
             barGap: 1,
             barRadius: 2,
-            waveColor: 'rgba(255, 255, 255, 0.2)',
-            progressColor: 'rgba(255, 255, 255, 0.4)',
+            waveColor: '#4a5568',
+            progressColor: '#FF6B35',
             cursorColor: colors.primaryLight,
             cursorWidth: 2,
             interact: true,
@@ -221,9 +221,11 @@ const TrackCard = ({ track, onPredictClick, hasPredicted }: any) => {
         >
             <div className="flex gap-4">
                 <img 
-                    src='/assets/frequency-crown.png' 
+                    src={track.artist_image || '/assets/logo-crown.png'} 
                     alt={track.artist_name}
-                    className="w-16 h-16 rounded-full object-cover"
+                    className="w-16 h-16 rounded-full object-cover border-2"
+                    style={{ borderColor: colors.primaryLight }}
+                    onError={(e) => { (e.target as HTMLImageElement).src = '/assets/logo-crown.png'; }}
                 />
                 <div className="flex-1">
                     <h3 className="text-white font-semibold text-lg">{track.artist_name}</h3>
@@ -253,15 +255,18 @@ const TrackCard = ({ track, onPredictClick, hasPredicted }: any) => {
                 <motion.button
                     onClick={() => onPredictClick(track)}
                     disabled={hasPredicted}
-                    className="px-6 py-2 rounded-lg font-bold font-primary tracking-wider"
+                    className="px-6 py-2 rounded-lg font-bold font-primary tracking-wider flex items-center gap-2"
                     style={{ 
-                        background: hasPredicted ? colors.gray700 : colors.gradientPrimary,
-                        boxShadow: hasPredicted ? 'none' : colors.glowRedStrong,
+                        background: hasPredicted ? 'linear-gradient(135deg, #0D7377 0%, #14FFEC 100%)' : colors.gradientPrimary,
+                        boxShadow: hasPredicted ? '0 0 20px rgba(20, 255, 236, 0.5)' : colors.glowRedStrong,
                         color: colors.white
                     }}
                     whileHover={{ scale: hasPredicted ? 1 : 1.05 }}
                     whileTap={{ scale: hasPredicted ? 1 : 0.95 }}
                 >
+                    {hasPredicted && (
+                        <img src="/assets/certified-badge.png" alt="Certified" className="w-6 h-6" />
+                    )}
                     {hasPredicted ? 'CERTIFIED' : 'CERTIFY'}
                 </motion.button>
             </div>

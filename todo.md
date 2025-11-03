@@ -87,3 +87,20 @@
   - [x] Token tiers section (Red FT, Blue FT, Purple FT, Gold FT with descriptions)
 - [x] Wire up "Begin Your Journey" to navigate to feed
 - [x] Update feed to match the actual design (proper track cards with artist images)
+
+## Match User's Actual Design (CRITICAL)
+- [x] Copy user's actual logo files (crown with waveforms) to project
+- [x] Update color scheme to match mockups (orange #FF4500, blue/purple gradients, metallic gray)
+- [x] Change typography to industrial/metallic "FREQUENCY FACTORY" style
+- [ ] Rebuild track cards with circular artist photos (not crown logos) - NEEDS REAL ARTIST PHOTOS
+- [ ] Update waveforms to gradient style (orange→pink→purple→blue) - WaveSurfer gradient config
+- [x] Match exact layout from mobile_app_mockup.png
+- [x] Add proper metallic/industrial visual theme
+- [x] Remove any generated assets that don't match user's design
+
+## Vibe-atar System (NEW FEATURE)
+- [x] Generate diverse vibe-atar portraits (chill, energetic, cosmic, edgy, mysterious)
+- [x] Update track cards to use circular vibe-atar portraits instead of crown logos
+- [ ] Implement gradient waveforms (orange→pink→purple→blue) matching mockup - WaveSurfer limitation
+- [x] Add certified gear badge (778FD033...png) for completed predictions
+- [x] Test complete prediction flow with new visuals

@@ -1,0 +1,8 @@
+{
+  "query": "UPDATE submissions \nSET artist_image = CASE \n  WHEN artist_name = 'The Midnight Runners' THEN '/assets/vibe-atars/energetic-vibe.png'\n  WHEN artist_name = 'Luna Eclipse' THEN '/assets/vibe-atars/cosmic-vibe.png'\n  WHEN artist_name = 'Cosmic Waves' THEN '/assets/vibe-atars/chill-vibe.png'\n  WHEN artist_name = 'Neon Pulse' THEN '/assets/vibe-atars/edgy-vibe.png'\n  WHEN artist_name = 'Spectrum Shift' THEN '/assets/vibe-atars/mysterious-vibe.png'\nEND\nWHERE artist_name IN ('The Midnight Runners', 'Luna Eclipse', 'Cosmic Waves', 'Neon Pulse', 'Spectrum Shift');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user FgSa3by49gRXFDm.dc7a5fe36869 --database YotNmyxSzcVENhBTJXwbjU --execute UPDATE submissions \nSET artist_image = CASE \n  WHEN artist_name = 'The Midnight Runners' THEN '/assets/vibe-atars/energetic-vibe.png'\n  WHEN artist_name = 'Luna Eclipse' THEN '/assets/vibe-atars/cosmic-vibe.png'\n  WHEN artist_name = 'Cosmic Waves' THEN '/assets/vibe-atars/chill-vibe.png'\n  WHEN artist_name = 'Neon Pulse' THEN '/assets/vibe-atars/edgy-vibe.png'\n  WHEN artist_name = 'Spectrum Shift' THEN '/assets/vibe-atars/mysterious-vibe.png'\nEND\nWHERE artist_name IN ('The Midnight Runners', 'Luna Eclipse', 'Cosmic Waves', 'Neon Pulse', 'Spectrum Shift');",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'yotnmyxszcvenhbtjxwbju.submissions' doesn't exist"
+  ]
+}
