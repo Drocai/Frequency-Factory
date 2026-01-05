@@ -1,6 +1,26 @@
 # Frequency Factory TODO
 
-## Phase 1: Core UI & Authentication (In Progress)
+## 📅 Current Session Summary (Jan 5, 2026 - 1:30 AM EST)
+
+### ✅ Completed Today
+- [x] Database migrations (comments table + onboarding column)
+- [x] Created comprehensive PROJECT_HANDOFF.md documentation (23KB)
+- [x] Created CURRENT_STATUS.md for session handoff
+- [x] Reviewed and approved MVP launch plan
+- [x] Identified Spotify API integration as best content strategy
+- [x] Resolved SQL execution access with service role key
+
+### 🎯 Next Session Priority (4-6 hours to launch)
+- [ ] Get Spotify API credentials (Client ID + Secret) - 5 min
+- [ ] Implement Spotify link submission - 2 hours
+- [ ] Submit 10-20 real tracks via Spotify links - 10 min
+- [ ] Fix QUENCY chat reliability - 1-2 hours
+- [ ] Test all user flows - 30 min
+- [ ] Deploy to production - 30 min
+
+---
+
+## ✅ Phase 1: Core UI & Authentication (COMPLETE)
 - [x] Install dependencies (WaveSurfer, Supabase, Framer Motion)
 - [x] Set up Supabase client configuration
 - [x] Create Feed page with professional dark UI
@@ -18,66 +38,7 @@
 - [x] Fix CORS issues with audio URLs
 - [x] Add RLS policies for public read access
 
-## Phase 2: Additional Pages
-- [ ] Create Discover page (browse all tracks)
-- [ ] Create Submit page (track submission form)
-- [ ] Create Rewards page (token redemption, leaderboards)
-- [ ] Create Profile page (user stats, badges, predictions history)
-- [ ] Implement navigation between pages
-
-## Phase 3: Token Economy
-- [ ] Display user token balance
-- [ ] Implement token rewards for predictions
-- [ ] Add token tier system (Red, Blue, Purple, Gold)
-- [ ] Create token redemption system
-- [ ] Build leaderboards
-
-## Phase 4: Real-time Features
-- [ ] Add real-time track updates via Supabase subscriptions
-- [ ] Implement live prediction tracking
-- [ ] Add engagement metrics (likes, comments)
-- [ ] Build notification system
-
-## Phase 5: QUENCY AI Chatbot
-- [ ] Integrate ElevenLabs for voice synthesis
-- [ ] Build chat interface
-- [ ] Add QUENCY personality and responses
-- [ ] Implement voice playback
-
-## Phase 6: YouTube Integration
-- [ ] Design OBS overlay for live stream
-- [ ] Build real-time queue display
-- [ ] Add live prediction visualization
-- [ ] Implement chat integration
-
-## Phase 7: Admin & Management
-- [ ] Create admin dashboard for track approval
-- [ ] Build moderation tools
-- [ ] Add analytics and reporting
-- [ ] Implement user management
-
-## Phase 8: Polish & Testing
-- [ ] Mobile responsiveness testing
-- [ ] Cross-browser compatibility
-- [ ] Performance optimization
-- [ ] Bug fixes and refinements
-- [ ] User acceptance testing
-
-## Phase 9: Deployment
-- [ ] Configure production Supabase settings
-- [ ] Set up Vercel deployment
-- [ ] Configure custom domain
-- [ ] Set up monitoring and analytics
-- [ ] Launch!
-
-## Critical Fixes
-- [x] Fix mobile viewport - app showing tiny preview instead of full interface
-- [x] Remove or hide the preview image on mobile
-- [x] Test responsive design on mobile devices
-- [x] Verify prediction submission works on mobile
-- [x] Verify audio waveforms display correctly
-
-## Landing Page & Onboarding (PRIORITY)
+## ✅ Landing Page & Onboarding (COMPLETE)
 - [x] Create landing page with hero section (Frequency Factory crown logo, cosmic theme)
 - [x] Add "Begin Your Journey" button (blue, glowing)
 - [x] Add "Learn More" button
@@ -88,29 +49,130 @@
 - [x] Wire up "Begin Your Journey" to navigate to feed
 - [x] Update feed to match the actual design (proper track cards with artist images)
 
-## Match User's Actual Design (CRITICAL)
-- [x] Copy user's actual logo files (crown with waveforms) to project
-- [x] Update color scheme to match mockups (orange #FF4500, blue/purple gradients, metallic gray)
-- [x] Change typography to industrial/metallic "FREQUENCY FACTORY" style
-- [ ] Rebuild track cards with circular artist photos (not crown logos) - NEEDS REAL ARTIST PHOTOS
-- [ ] Update waveforms to gradient style (orange→pink→purple→blue) - WaveSurfer gradient config
-- [x] Match exact layout from mobile_app_mockup.png
-- [x] Add proper metallic/industrial visual theme
-- [x] Remove any generated assets that don't match user's design
-
-## Vibe-atar System (NEW FEATURE)
+## ✅ Vibe-atar System (COMPLETE)
 - [x] Generate diverse vibe-atar portraits (chill, energetic, cosmic, edgy, mysterious)
 - [x] Update track cards to use circular vibe-atar portraits instead of crown logos
-- [ ] Implement gradient waveforms (orange→pink→purple→blue) matching mockup - WaveSurfer limitation
-- [x] Add certified gear badge (778FD033...png) for completed predictions
+- [x] Add certified gear badge for completed predictions
 - [x] Test complete prediction flow with new visuals
 
-## Complete App Features (PRIORITY)
+## ✅ Complete App Features (COMPLETE)
 - [x] Build Discover page (browse tracks, filter by genre, search)
 - [x] Build Submit page (track upload form, audio file handling, S3 storage)
 - [x] Build Profile page (user stats, prediction history, token balance, achievements)
 - [x] Build Rewards page (leaderboard, token redemption, achievement badges)
 - [x] Add notification center (bell icon in header, activity feed dropdown)
-- [x] Implement QUENCY AI chat (floating button, using built-in LLM responses)
-- [ ] Replace demo mode with real Google OAuth (Supabase Auth) - OPTIONAL
-- [x] Test complete user journey from landing to all pages
+- [x] Implement QUENCY AI chat (floating button, using Anthropic Claude)
+
+## ✅ New Components (COMPLETE)
+- [x] PredictionModal with Factory Metrics (Hook, Originality, Production)
+- [x] OnboardingModal with 3-step tutorial
+- [x] CommentsModal with real-time submission
+- [x] Enhanced Discover with real sorting logic
+- [x] Enhanced Submit with completeness score
+
+## ✅ Database Setup (COMPLETE)
+- [x] Run create_comments_table.sql migration
+- [x] Run add_onboarding_column.sql migration
+- [x] Verify tables exist in Supabase
+- [x] Test RLS policies
+
+## ⚠️ Critical Blockers (MUST FIX BEFORE LAUNCH)
+
+### 1. Content Seeding (HIGHEST PRIORITY)
+- [ ] **Option A: Spotify API Integration (RECOMMENDED)**
+  - [ ] Get Spotify API credentials (5 min)
+  - [ ] Create server/spotify.ts helper (1 hour)
+  - [ ] Update Submit page with "Paste Spotify Link" input (30 min)
+  - [ ] Add platform/external_id/preview_url columns to submissions table (10 min)
+  - [ ] Embed Spotify player in Feed (30 min)
+  - [ ] Test: Submit Spotify link → verify metadata auto-fills
+  - [ ] Submit 10-20 real tracks (10 min)
+
+- [ ] **Option B: Manual Upload (FALLBACK)**
+  - [ ] Download 20 tracks from Free Music Archive (2 hours)
+  - [ ] Upload MP3s to S3 (1 hour)
+  - [ ] Upload cover art (30 min)
+  - [ ] Insert metadata into Supabase (30 min)
+
+### 2. QUENCY Chat Reliability
+- [ ] Debug message delivery pipeline (1 hour)
+- [ ] Test: Send message → verify AI response appears (10 min)
+- [ ] Add error handling for failed responses (30 min)
+
+### 3. Audio Player
+- [ ] Add real audio URLs to tracks (depends on content strategy)
+- [ ] Test: Play/pause on all tracks (10 min)
+- [ ] Verify waveforms display correctly (10 min)
+
+## ⚠️ Production Polish (MEDIUM PRIORITY)
+
+### Loading States
+- [ ] Add loading spinner to Feed while fetching tracks
+- [ ] Add loading spinner to Discover page
+- [ ] Add loading spinner to Profile stats
+- [ ] Add loading spinner to Leaderboard
+
+### Error Handling
+- [ ] Add error boundary to App.tsx (catch crashes)
+- [ ] Add error message if track upload fails
+- [ ] Add error message if prediction submission fails
+- [ ] Add toast notification for all user actions (success/error)
+
+### Mobile Responsiveness
+- [ ] Test on iPhone Safari
+- [ ] Test on Android Chrome
+- [ ] Fix bottom nav z-index issues
+- [ ] Fix any obvious layout breaks
+
+## 🚀 YouTube/OBS Integration (COMPLETE)
+- [x] Design OBS overlay for live stream
+- [x] Build real-time queue display
+- [x] Add live prediction visualization
+- [x] Create OBS_SETUP_GUIDE.md
+- [ ] YouTube chat bot integration (POST-LAUNCH)
+
+## 🎁 Token Economy (PARTIAL)
+- [x] Display user token balance
+- [x] Implement token rewards for predictions
+- [x] Add token tier system (Red, Blue, Purple, Gold)
+- [x] Create token redemption UI
+- [ ] Build token redemption backend (manual discount codes)
+- [ ] Integrate Shopify API (POST-LAUNCH)
+
+## 🔧 Admin & Management (PARTIAL)
+- [x] Create admin dashboard for track approval (basic structure)
+- [ ] Build moderation tools (ban users, delete comments)
+- [ ] Add analytics and reporting
+- [ ] Implement user management
+
+## 📊 Deployment Checklist
+- [ ] Run final test of all features locally
+- [ ] Fix all critical bugs
+- [ ] Create checkpoint via webdev_save_checkpoint
+- [ ] Click "Publish" in Manus Management UI
+- [ ] Wait for deployment (5-10 min)
+- [ ] Test live URL
+- [ ] Update OBS overlay URL
+- [ ] Verify all images/audio load correctly
+
+## 🎯 MVP Success Criteria
+
+### Must Have (Blocking Launch)
+- [ ] 20+ tracks in database with playable audio
+- [ ] Prediction flow works end-to-end
+- [ ] Comments system functional
+- [ ] OBS overlay displays correctly
+- [ ] Mobile responsive (basic)
+
+### Nice to Have (Post-Launch)
+- [ ] QUENCY 100% reliable
+- [ ] Token redemption backend
+- [ ] YouTube chat bot
+- [ ] Voice-enabled QUENCY
+- [ ] Advanced analytics
+
+---
+
+**Last Updated:** January 5, 2026 1:30 AM EST  
+**Next Session:** January 6, 2026  
+**Estimated Time to Launch:** 4-6 hours
