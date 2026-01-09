@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { CheckCircle2, ExternalLink, Music, Sparkles } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Music, Sparkles, Check } from 'lucide-react';
+import { detectPlatform, getPlatformInfo } from '@/lib/streamingUtils';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
@@ -88,12 +89,8 @@ export default function Submit() {
     setIsSubmitting(true);
 
     try {
-      // Detect platform from streaming link
-      let platform = 'other';
-      if (formData.streamingLink.includes('spotify')) platform = 'spotify';
-      else if (formData.streamingLink.includes('soundcloud')) platform = 'soundcloud';
-      else if (formData.streamingLink.includes('youtube') || formData.streamingLink.includes('youtu.be')) platform = 'youtube';
-      else if (formData.streamingLink.includes('bandcamp')) platform = 'bandcamp';
+      // Detect platform from streaming link using utility
+      const platform = detectPlatform(formData.streamingLink);
 
       const { data, error } = await supabase.from('submissions').insert({
         artist_name: formData.artistName,
@@ -326,7 +323,16 @@ export default function Submit() {
                   className="w-full px-4 py-3 rounded-xl text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-orange-500 pr-10"
                   style={{ background: colors.gray700 }}
                 />
-                <ExternalLink className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                {formData.streamingLink && detectPlatform(formData.streamingLink) !== 'unknown' ? (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-bold"
+                    style={{ color: getPlatformInfo(detectPlatform(formData.streamingLink)).color }}
+                  >
+                    <Check className="w-4 h-4" />
+                    {getPlatformInfo(detectPlatform(formData.streamingLink)).name}
+                  </div>
+                ) : (
+                  <ExternalLink className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                )}
               </div>
               <p className="text-gray-500 text-xs mt-1">
                 Paste a link to your track on any major platform

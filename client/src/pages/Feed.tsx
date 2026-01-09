@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Heart, MessageCircle, Menu, Play, Pause, X
 } from 'lucide-react';
-import WaveSurfer from 'wavesurfer.js';
+import StreamingPlayer from '@/components/StreamingPlayer';
+import { detectPlatform } from '@/lib/streamingUtils';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
@@ -29,63 +30,7 @@ const colors = {
   gradientPrimary: 'linear-gradient(135deg, #FF4500 0%, #FF6B35 100%)',
 };
 
-// WaveSurfer Player Component with gradient waveform
-const WaveSurferPlayer = React.memo(({ audioUrl }: { audioUrl: string }) => {
-  const waveformRef = useRef<HTMLDivElement>(null);
-  const wsInstanceRef = useRef<WaveSurfer | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!waveformRef.current) return;
-    if (wsInstanceRef.current) wsInstanceRef.current.destroy();
-    
-    // Create gradient canvas for waveform
-    const ctx = document.createElement('canvas').getContext('2d');
-    let gradient: CanvasGradient | string = '#FF6B35';
-    if (ctx) {
-      gradient = ctx.createLinearGradient(0, 0, 300, 0);
-      gradient.addColorStop(0, '#FF4500');
-      gradient.addColorStop(0.5, '#FF6B35');
-      gradient.addColorStop(0.75, '#8B00FF');
-      gradient.addColorStop(1, '#1E90FF');
-    }
-
-    const ws = WaveSurfer.create({
-      container: waveformRef.current,
-      url: audioUrl,
-      height: 50,
-      barWidth: 3,
-      barGap: 2,
-      barRadius: 3,
-      waveColor: gradient,
-      progressColor: '#FFFFFF',
-      cursorColor: 'transparent',
-      cursorWidth: 0,
-      interact: true,
-    });
-    
-    ws.on('play', () => setIsPlaying(true));
-    ws.on('pause', () => setIsPlaying(false));
-    ws.on('finish', () => setIsPlaying(false));
-    wsInstanceRef.current = ws;
-    
-    return () => ws.destroy();
-  }, [audioUrl]);
-
-  const handlePlayPause = () => wsInstanceRef.current?.playPause();
-
-  return (
-    <div className="relative cursor-pointer" onClick={handlePlayPause}>
-      <div ref={waveformRef} className="w-full" />
-      {!isPlaying && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-3 rounded-full bg-black/60 backdrop-blur-sm">
-          <Play className="w-6 h-6 text-white" fill="white" />
-        </div>
-      )}
-    </div>
-  );
-});
-WaveSurferPlayer.displayName = 'WaveSurferPlayer';
 
 // Static waveform visualization (when no audio URL)
 const StaticWaveform = () => (
@@ -164,10 +109,14 @@ const TrackCard = ({
         )}
       </div>
 
-      {/* Waveform */}
+      {/* Audio Player */}
       <div className="mb-4">
-        {track.audio_url ? (
-          <WaveSurferPlayer audioUrl={track.audio_url} />
+        {track.audio_url || track.external_url ? (
+          <StreamingPlayer 
+            url={track.external_url || track.audio_url} 
+            height={80}
+            showControls={true}
+          />
         ) : (
           <StaticWaveform />
         )}

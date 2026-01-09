@@ -189,3 +189,24 @@ Based on user's reference images, implementing full mobile-friendly experience:
 
 **Last Updated:** January 8, 2026
 **Status:** MVP Complete - Ready for Checkpoint
+
+
+---
+
+## 🎵 NEW: Spotify & YouTube API Integration (Jan 8, 2026)
+
+### Audio Playback Integration
+- [x] Set up YouTube embedded player (iframe API)
+- [x] Set up Spotify embedded player (iframe API)
+- [x] Create unified StreamingPlayer component
+- [x] Add platform detection from streaming links
+- [x] Extract video/track IDs from URLs
+- [x] Update Feed to use real audio playback
+- [x] Add playback controls (play, pause, mute for YouTube)
+- [x] Handle playback errors gracefully
+- [x] Add loading states for audio
+- [x] Test with unit tests (15 tests passing)
+- [x] Platform badges showing YouTube/Spotify/SoundCloud
+- [x] External link button to open in platform
+- [ ] Update FactoryMonitor to use real audio (optional)
+- [ ] Update LiveOverlay to show currently playing track (optional)
