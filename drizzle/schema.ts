@@ -33,6 +33,11 @@ export const users = mysqlTable("users", {
   /** Accurate predictions count */
   accuratePredictions: int("accuratePredictions").default(0),
   
+  /** Last date user claimed daily bonus (YYYY-MM-DD format) */
+  lastDailyBonusDate: varchar("lastDailyBonusDate", { length: 10 }),
+  /** Current login streak (consecutive days) */
+  loginStreak: int("loginStreak").default(0),
+  
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

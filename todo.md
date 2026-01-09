@@ -267,3 +267,78 @@ Based on user's reference images, implementing full mobile-friendly experience:
 - [x] Test token spend persistence
 - [x] Test avatar selection persistence
 - [x] Write unit tests for token procedures (34 tests passing)
+
+
+---
+
+## 🛠️ NEW: Admin Panel (Jan 9, 2026)
+
+### Admin Dashboard
+- [x] Create AdminDashboard page with sidebar navigation
+- [x] Add role-based access control (admin only)
+- [x] Stats overview: Total submissions, pending, approved, rejected
+- [x] Recent activity feed
+
+### Submission Management
+- [x] List all submissions with filters (pending/approved/rejected)
+- [x] Approve/Reject buttons with confirmation
+- [x] Bulk actions (approve/reject multiple)
+- [x] View submission details modal (expandable rows)
+- [x] Delete submission functionality
+
+### User Management
+- [x] List all users with role badges
+- [x] Update user roles (user/admin)
+- [x] View token balances
+
+### Queue Control
+- [ ] Reorder queue manually (drag and drop) - future enhancement
+- [ ] Priority boost option - future enhancement
+
+---
+
+## 📱 NEW: Social Sharing (Jan 9, 2026)
+
+### Share Cards
+- [x] Generate shareable preview cards for certified tracks
+- [x] Include track title, artist, Factory Metrics scores
+- [x] Crown logo watermark
+- [x] Gradient background matching brand
+
+### Platform Integration
+- [x] Twitter/X share button with pre-filled text
+- [x] Instagram share (copy link + instructions)
+- [x] Copy link to clipboard
+- [ ] Open Graph meta tags for link previews - future enhancement
+
+### Share Modal
+- [x] Preview card before sharing
+- [x] Share message preview
+- [x] Share button in Feed track cards
+
+---
+
+## 🎁 NEW: Daily Login Bonus (Jan 9, 2026)
+
+### Backend
+- [x] Add lastDailyBonusDate column to users table
+- [x] Add loginStreak column for consecutive days
+- [x] Create tokens.claimDailyBonus procedure
+- [x] Create tokens.getStreak procedure
+- [x] Award +1 FT on first login of the day
+- [x] Bonus for streaks (7 days = +5 FT, 30 days = +20 FT)
+
+### Frontend
+- [x] Daily bonus notification modal with animation
+- [x] Login streak display in modal
+- [x] Streak progress bar to next milestone
+- [x] Auto-claim on Feed page load
+
+---
+
+## ✅ Testing (Jan 9, 2026)
+- [x] 55 unit tests passing
+- [x] Admin stats and bulk operations tests
+- [x] Daily login bonus calculation tests
+- [x] Streak milestone detection tests
+- [x] Social sharing URL generation tests

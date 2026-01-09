@@ -461,3 +461,264 @@ export async function getTopPredictors(limit = 10) {
 
   return result;
 }
+
+
+// ============================================
+// ADMIN QUERIES
+// ============================================
+
+export async function getAdminStats() {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [totalSubmissions] = await db.select({ count: sql<number>`COUNT(*)` }).from(submissions);
+  const [pendingSubmissions] = await db.select({ count: sql<number>`COUNT(*)` }).from(submissions).where(eq(submissions.status, 'pending'));
+  const [approvedSubmissions] = await db.select({ count: sql<number>`COUNT(*)` }).from(submissions).where(eq(submissions.status, 'approved'));
+  const [rejectedSubmissions] = await db.select({ count: sql<number>`COUNT(*)` }).from(submissions).where(eq(submissions.status, 'rejected'));
+  const [totalUsers] = await db.select({ count: sql<number>`COUNT(*)` }).from(users);
+  const [totalComments] = await db.select({ count: sql<number>`COUNT(*)` }).from(comments);
+  const [totalPredictions] = await db.select({ count: sql<number>`COUNT(*)` }).from(predictions);
+
+  return {
+    totalSubmissions: totalSubmissions?.count || 0,
+    pendingSubmissions: pendingSubmissions?.count || 0,
+    approvedSubmissions: approvedSubmissions?.count || 0,
+    rejectedSubmissions: rejectedSubmissions?.count || 0,
+    totalUsers: totalUsers?.count || 0,
+    totalComments: totalComments?.count || 0,
+    totalPredictions: totalPredictions?.count || 0,
+  };
+}
+
+export async function getAllSubmissionsAdmin(status?: string, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  if (status && status !== 'all') {
+    const result = await db.select()
+      .from(submissions)
+      .where(eq(submissions.status, status as any))
+      .orderBy(desc(submissions.submittedAt))
+      .limit(limit);
+    return result;
+  }
+
+  const result = await db.select()
+    .from(submissions)
+    .orderBy(desc(submissions.submittedAt))
+    .limit(limit);
+
+  return result;
+}
+
+export async function updateSubmissionStatus(id: number, status: 'pending' | 'approved' | 'rejected') {
+  const db = await getDb();
+  if (!db) return null;
+
+  await db.update(submissions)
+    .set({ status })
+    .where(eq(submissions.id, id));
+
+  return { success: true };
+}
+
+export async function bulkUpdateSubmissionStatus(ids: number[], status: 'pending' | 'approved' | 'rejected') {
+  const db = await getDb();
+  if (!db) return null;
+
+  for (const id of ids) {
+    await db.update(submissions)
+      .set({ status })
+      .where(eq(submissions.id, id));
+  }
+
+  return { success: true, count: ids.length };
+}
+
+export async function deleteSubmission(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Delete related records first
+  await db.delete(comments).where(eq(comments.submissionId, id));
+  await db.delete(predictions).where(eq(predictions.submissionId, id));
+  await db.delete(likes).where(eq(likes.submissionId, id));
+  
+  // Delete the submission
+  await db.delete(submissions).where(eq(submissions.id, id));
+
+  return { success: true };
+}
+
+export async function getAllUsers(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+    tokenBalance: users.tokenBalance,
+    avatarName: users.avatarName,
+    createdAt: users.createdAt,
+    lastSignedIn: users.lastSignedIn,
+  })
+    .from(users)
+    .orderBy(desc(users.createdAt))
+    .limit(limit);
+
+  return result;
+}
+
+export async function updateUserRole(userId: number, role: 'user' | 'admin') {
+  const db = await getDb();
+  if (!db) return null;
+
+  await db.update(users)
+    .set({ role })
+    .where(eq(users.id, userId));
+
+  return { success: true };
+}
+
+export async function getRecentActivity(limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get recent submissions
+  const recentSubmissions = await db.select({
+    type: sql<string>`'submission'`,
+    id: submissions.id,
+    title: submissions.trackTitle,
+    artist: submissions.artistName,
+    createdAt: submissions.submittedAt,
+  })
+    .from(submissions)
+    .orderBy(desc(submissions.submittedAt))
+    .limit(limit);
+
+  // Get recent comments
+  const recentComments = await db.select({
+    type: sql<string>`'comment'`,
+    id: comments.id,
+    content: comments.content,
+    userName: comments.userName,
+    createdAt: comments.createdAt,
+  })
+    .from(comments)
+    .orderBy(desc(comments.createdAt))
+    .limit(limit);
+
+  // Combine and sort by date
+  const activities = [
+    ...recentSubmissions.map(s => ({ 
+      type: 'submission' as const, 
+      id: s.id, 
+      description: `${s.artist} submitted "${s.title}"`,
+      createdAt: s.createdAt 
+    })),
+    ...recentComments.map(c => ({ 
+      type: 'comment' as const, 
+      id: c.id, 
+      description: `${c.userName} commented: "${c.content?.slice(0, 50)}..."`,
+      createdAt: c.createdAt 
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+   .slice(0, limit);
+
+  return activities;
+}
+
+
+// ============================================
+// DAILY LOGIN BONUS QUERIES
+// ============================================
+
+export async function checkAndAwardDailyBonus(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const user = await getUserById(userId);
+  if (!user) return null;
+
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  const lastBonusDate = user.lastDailyBonusDate;
+
+  // Already claimed today
+  if (lastBonusDate === today) {
+    return { 
+      alreadyClaimed: true, 
+      streak: user.loginStreak || 0,
+      balance: user.tokenBalance 
+    };
+  }
+
+  // Calculate streak
+  let newStreak = 1;
+  if (lastBonusDate) {
+    const lastDate = new Date(lastBonusDate);
+    const todayDate = new Date(today);
+    const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) {
+      // Consecutive day - increase streak
+      newStreak = (user.loginStreak || 0) + 1;
+    } else {
+      // Streak broken - reset to 1
+      newStreak = 1;
+    }
+  }
+
+  // Calculate bonus amount
+  let bonusAmount = 1; // Base daily bonus
+  let streakBonus = 0;
+  
+  // Streak bonuses
+  if (newStreak === 7) {
+    streakBonus = 5; // 7-day streak bonus
+  } else if (newStreak === 30) {
+    streakBonus = 20; // 30-day streak bonus
+  } else if (newStreak % 7 === 0) {
+    streakBonus = 3; // Weekly milestone bonus
+  }
+
+  const totalBonus = bonusAmount + streakBonus;
+
+  // Update user with new streak and last bonus date
+  await db.update(users)
+    .set({ 
+      lastDailyBonusDate: today,
+      loginStreak: newStreak,
+    })
+    .where(eq(users.id, userId));
+
+  // Award the tokens
+  const newBalance = await awardTokens(
+    userId,
+    totalBonus,
+    'daily_login',
+    streakBonus > 0 
+      ? `Daily login bonus + ${newStreak}-day streak bonus!` 
+      : 'Daily login bonus'
+  );
+
+  return {
+    alreadyClaimed: false,
+    awarded: totalBonus,
+    baseBonus: bonusAmount,
+    streakBonus,
+    streak: newStreak,
+    balance: newBalance,
+  };
+}
+
+export async function getLoginStreak(userId: number) {
+  const user = await getUserById(userId);
+  if (!user) return { streak: 0, lastBonusDate: null };
+
+  return {
+    streak: user.loginStreak || 0,
+    lastBonusDate: user.lastDailyBonusDate,
+  };
+}

@@ -123,6 +123,16 @@ export const appRouter = router({
         const history = await db.getTokenHistory(ctx.user.id, input?.limit);
         return history;
       }),
+
+    // Check and claim daily login bonus
+    claimDailyBonus: protectedProcedure.mutation(async ({ ctx }) => {
+      return db.checkAndAwardDailyBonus(ctx.user.id);
+    }),
+
+    // Get login streak info
+    getStreak: protectedProcedure.query(async ({ ctx }) => {
+      return db.getLoginStreak(ctx.user.id);
+    }),
   }),
 
   // ============================================
@@ -340,6 +350,101 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().optional() }).optional())
       .query(async ({ input }) => {
         return db.getTopPredictors(input?.limit);
+      }),
+  }),
+
+  // ============================================
+  // ADMIN ROUTER (Admin only)
+  // ============================================
+  admin: router({
+    // Get admin dashboard stats
+    getStats: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin') {
+        throw new Error('Unauthorized: Admin access required');
+      }
+      return db.getAdminStats();
+    }),
+
+    // Get all submissions with filters
+    getSubmissions: protectedProcedure
+      .input(z.object({
+        status: z.string().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.getAllSubmissionsAdmin(input?.status, input?.limit);
+      }),
+
+    // Update submission status
+    updateSubmissionStatus: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(['pending', 'approved', 'rejected']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.updateSubmissionStatus(input.id, input.status);
+      }),
+
+    // Bulk update submission status
+    bulkUpdateStatus: protectedProcedure
+      .input(z.object({
+        ids: z.array(z.number()),
+        status: z.enum(['pending', 'approved', 'rejected']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.bulkUpdateSubmissionStatus(input.ids, input.status);
+      }),
+
+    // Delete submission
+    deleteSubmission: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.deleteSubmission(input.id);
+      }),
+
+    // Get all users
+    getUsers: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.getAllUsers(input?.limit);
+      }),
+
+    // Update user role
+    updateUserRole: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        role: z.enum(['user', 'admin']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.updateUserRole(input.userId, input.role);
+      }),
+
+    // Get recent activity
+    getRecentActivity: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.getRecentActivity(input?.limit);
       }),
   }),
 });

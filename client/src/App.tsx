@@ -15,6 +15,7 @@ import FactoryMonitor from "./pages/FactoryMonitor";
 import LiveOverlay from "./pages/LiveOverlay";
 import ArtistDashboard from "./pages/ArtistDashboard";
 import ReceiptsWall from "./pages/ReceiptsWall";
+import AdminDashboard from "./pages/AdminDashboard";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path={"/overlay"} component={LiveOverlay} />
       <Route path={"/dashboard"} component={ArtistDashboard} />
       <Route path={"/receipts"} component={ReceiptsWall} />
+      <Route path={"/admin"} component={AdminDashboard} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

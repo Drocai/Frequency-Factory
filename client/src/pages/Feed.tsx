@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Menu, LogIn } from 'lucide-react';
+import { Heart, MessageCircle, Menu, LogIn, Share2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import StreamingPlayer from '@/components/StreamingPlayer';
 import { toast } from 'sonner';
@@ -8,6 +8,8 @@ import BottomNav from '@/components/BottomNav';
 import QuencyChat from '@/components/QuencyChat';
 import PredictionModal from '@/components/PredictionModal';
 import CommentsModal from '@/components/CommentsModal';
+import ShareModal from '@/components/ShareModal';
+import DailyBonusModal from '@/components/DailyBonusModal';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
@@ -55,6 +57,7 @@ const TrackCard = ({
   track, 
   onPredictClick, 
   onCommentClick,
+  onShareClick,
   onLike,
   hasPredicted,
   isLiked,
@@ -138,6 +141,13 @@ const TrackCard = ({
             <MessageCircle className="w-5 h-5" />
             <span className="text-sm">{formatCount(track.commentsCount || 0)}</span>
           </button>
+
+          <button 
+            onClick={() => onShareClick(track)}
+            className="flex items-center gap-2 text-gray-400 hover:text-orange-400 transition"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
         </div>
 
         <motion.button
@@ -205,6 +215,9 @@ export default function Feed() {
   
   const [selectedTrack, setSelectedTrack] = useState<any>(null);
   const [commentTrack, setCommentTrack] = useState<any>(null);
+  const [shareTrack, setShareTrack] = useState<any>(null);
+  const [dailyBonusData, setDailyBonusData] = useState<any>(null);
+  const [showDailyBonus, setShowDailyBonus] = useState(false);
   const [userPredictions, setUserPredictions] = useState<Set<number>>(new Set());
   const [userLikes, setUserLikes] = useState<Set<number>>(new Set());
 
@@ -246,6 +259,17 @@ export default function Feed() {
     },
   });
 
+  // Daily bonus mutation
+  const dailyBonusMutation = trpc.tokens.claimDailyBonus.useMutation({
+    onSuccess: (data) => {
+      if (data && !data.alreadyClaimed) {
+        setDailyBonusData(data);
+        setShowDailyBonus(true);
+        refetchProfile();
+      }
+    },
+  });
+
   // Update user likes when data changes
   useEffect(() => {
     if (likesData) {
@@ -261,6 +285,13 @@ export default function Feed() {
     }
   }, [isAuthenticated, profile, setLocation]);
 
+  // Check for daily bonus on login
+  useEffect(() => {
+    if (isAuthenticated && profile?.hasCompletedOnboarding && !dailyBonusMutation.isPending) {
+      dailyBonusMutation.mutate();
+    }
+  }, [isAuthenticated, profile?.hasCompletedOnboarding]);
+
   const handlePredictClick = (track: any) => {
     if (!isAuthenticated) {
       toast.error('Please sign in to certify tracks');
@@ -271,6 +302,10 @@ export default function Feed() {
 
   const handleCommentClick = (track: any) => {
     setCommentTrack(track);
+  };
+
+  const handleShareClick = (track: any) => {
+    setShareTrack(track);
   };
 
   const handleLike = async (trackId: number) => {
@@ -386,6 +421,7 @@ export default function Feed() {
                 track={track} 
                 onPredictClick={handlePredictClick}
                 onCommentClick={handleCommentClick}
+                onShareClick={handleShareClick}
                 onLike={handleLike}
                 hasPredicted={userPredictions.has(track.id)}
                 isLiked={userLikes.has(track.id)}
@@ -423,6 +459,30 @@ export default function Feed() {
           />
         )}
       </AnimatePresence>
+
+      {/* Share Modal */}
+      {shareTrack && (
+        <ShareModal
+          isOpen={!!shareTrack}
+          onClose={() => setShareTrack(null)}
+          track={{
+            id: shareTrack.id,
+            artistName: shareTrack.artistName,
+            trackTitle: shareTrack.trackTitle,
+            hookStrength: shareTrack.avgHookStrength,
+            originality: shareTrack.avgOriginality,
+            productionQuality: shareTrack.avgProductionQuality,
+            totalCertifications: shareTrack.totalCertifications,
+          }}
+        />
+      )}
+
+      {/* Daily Bonus Modal */}
+      <DailyBonusModal
+        isOpen={showDailyBonus}
+        onClose={() => setShowDailyBonus(false)}
+        bonusData={dailyBonusData}
+      />
 
       {/* Bottom Navigation */}
       <BottomNav activeTab="home" />

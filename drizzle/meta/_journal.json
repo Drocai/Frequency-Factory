@@ -15,6 +15,13 @@
       "when": 1767920420659,
       "tag": "0001_dry_dazzler",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1767935940302,
+      "tag": "0002_tense_blue_blade",
+      "breakpoints": true
     }
   ]
 }
