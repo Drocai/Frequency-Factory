@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { CheckCircle2, ExternalLink, Music, Sparkles, Check } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Sparkles, Check, LogIn } from 'lucide-react';
 import { detectPlatform, getPlatformInfo } from '@/lib/streamingUtils';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { getLoginUrl } from '@/const';
+import { Button } from '@/components/ui/button';
 
 const colors = {
   primary: '#FF4500',
@@ -44,6 +47,7 @@ interface FormData {
 
 export default function Submit() {
   const [, setLocation] = useLocation();
+  const { user, isAuthenticated } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [ticketNumber, setTicketNumber] = useState('');
@@ -59,6 +63,21 @@ export default function Submit() {
     notes: '',
   });
 
+  // tRPC mutation for creating submission
+  const createSubmission = trpc.submissions.create.useMutation({
+    onSuccess: (data) => {
+      if (data) {
+        setTicketNumber(data.ticketNumber || `#${data.id}`);
+        setSubmitted(true);
+        toast.success(`Track submitted! +1 FT earned`);
+      }
+    },
+    onError: (error) => {
+      toast.error('Failed to submit track: ' + error.message);
+      setIsSubmitting(false);
+    },
+  });
+
   // Calculate completeness score
   const calculateCompleteness = (): number => {
     let score = 0;
@@ -72,7 +91,7 @@ export default function Submit() {
   };
 
   const completeness = calculateCompleteness();
-  const canSubmit = completeness >= 70;
+  const canSubmit = completeness >= 70 && isAuthenticated;
 
   const updateField = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -81,44 +100,32 @@ export default function Submit() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!canSubmit) {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to submit tracks');
+      return;
+    }
+
+    if (completeness < 70) {
       toast.error('Please fill in more fields (70% required)');
       return;
     }
 
     setIsSubmitting(true);
 
-    try {
-      // Detect platform from streaming link using utility
-      const platform = detectPlatform(formData.streamingLink);
+    // Detect platform from streaming link
+    const platform = detectPlatform(formData.streamingLink);
 
-      const { data, error } = await supabase.from('submissions').insert({
-        artist_name: formData.artistName,
-        track_title: formData.trackTitle,
-        genre: formData.genre,
-        audio_url: formData.streamingLink,
-        platform: platform,
-        external_url: formData.streamingLink,
-        best_timestamp: formData.bestTimestamp,
-        submitter_email: formData.email,
-        ai_assisted: formData.aiAssisted === 'Yes',
-        notes: formData.notes,
-        status: 'pending',
-        submitted_by: 'demo-user',
-      }).select('id').single();
-
-      if (error) throw error;
-
-      const ticket = `#${1000 + (data?.id || Math.floor(Math.random() * 1000))}`;
-      setTicketNumber(ticket);
-      setSubmitted(true);
-      toast.success(`Track submitted! Ticket ${ticket}`);
-    } catch (error) {
-      console.error('Error submitting track:', error);
-      toast.error('Failed to submit track');
-    } finally {
-      setIsSubmitting(false);
-    }
+    createSubmission.mutate({
+      artistName: formData.artistName,
+      trackTitle: formData.trackTitle,
+      email: formData.email || undefined,
+      bestTimestamp: formData.bestTimestamp || undefined,
+      streamingLink: formData.streamingLink || undefined,
+      genre: formData.genre || undefined,
+      aiAssisted: formData.aiAssisted,
+      notes: formData.notes || undefined,
+      platform: platform !== 'unknown' ? platform : undefined,
+    });
   };
 
   if (submitted) {
@@ -148,6 +155,7 @@ export default function Submit() {
             >
               <p className="text-gray-400 text-sm">Your Ticket Number</p>
               <p className="text-3xl font-bold text-white">{ticketNumber}</p>
+              <p className="text-green-400 text-sm mt-2">+1 FT earned!</p>
             </div>
 
             <div className="flex gap-3">
@@ -227,13 +235,26 @@ export default function Submit() {
             </p>
           </div>
 
+          {/* Login Prompt */}
+          {!isAuthenticated && (
+            <div className="mb-6 p-4 rounded-xl" style={{ background: colors.gray700, border: `1px solid ${colors.gray600}` }}>
+              <p className="text-gray-300 text-sm mb-3">Sign in to submit tracks and earn tokens!</p>
+              <a href={getLoginUrl()}>
+                <Button className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Sign In to Submit
+                </Button>
+              </a>
+            </div>
+          )}
+
           {/* Completeness Bar */}
           <div className="mb-6">
             <div className="flex justify-between text-sm mb-2">
               <span className="text-gray-400">Completeness</span>
               <span 
                 className="font-bold"
-                style={{ color: canSubmit ? '#10B981' : colors.primaryLight }}
+                style={{ color: completeness >= 70 ? '#10B981' : colors.primaryLight }}
               >
                 {completeness}%
               </span>
@@ -245,7 +266,7 @@ export default function Submit() {
               <motion.div
                 className="h-full rounded-full"
                 style={{ 
-                  background: canSubmit 
+                  background: completeness >= 70 
                     ? 'linear-gradient(90deg, #10B981, #14FFEC)' 
                     : `linear-gradient(90deg, ${colors.primary}, ${colors.primaryLight})`,
                 }}
@@ -297,7 +318,7 @@ export default function Submit() {
                 />
               </div>
               <div>
-                <label className="block text-gray-300 text-sm mb-2">Best 45s Timestamp</label>
+                <label className="block text-gray-300 text-sm mb-2">Best 45s starts at</label>
                 <input
                   type="text"
                   value={formData.bestTimestamp}

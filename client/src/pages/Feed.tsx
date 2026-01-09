@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Heart, MessageCircle, Menu, Play, Pause, X
-} from 'lucide-react';
+import { Heart, MessageCircle, Menu, LogIn } from 'lucide-react';
+import { useLocation } from 'wouter';
 import StreamingPlayer from '@/components/StreamingPlayer';
-import { detectPlatform } from '@/lib/streamingUtils';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
-import NotificationCenter from '@/components/NotificationCenter';
 import QuencyChat from '@/components/QuencyChat';
 import PredictionModal from '@/components/PredictionModal';
 import CommentsModal from '@/components/CommentsModal';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { getLoginUrl } from '@/const';
+import { Button } from '@/components/ui/button';
 
 // Design system colors
 const colors = {
@@ -30,14 +30,12 @@ const colors = {
   gradientPrimary: 'linear-gradient(135deg, #FF4500 0%, #FF6B35 100%)',
 };
 
-
-
 // Static waveform visualization (when no audio URL)
 const StaticWaveform = () => (
   <div className="h-12 flex items-end justify-center gap-[2px] px-2">
     {Array.from({ length: 60 }).map((_, i) => {
       const height = Math.sin(i * 0.3) * 20 + Math.random() * 15 + 10;
-      const hue = 20 + (i / 60) * 280; // Orange to blue gradient
+      const hue = 20 + (i / 60) * 280;
       return (
         <div
           key={i}
@@ -52,14 +50,15 @@ const StaticWaveform = () => (
   </div>
 );
 
-// Track Card Component matching mockup
+// Track Card Component
 const TrackCard = ({ 
   track, 
   onPredictClick, 
   onCommentClick,
   onLike,
   hasPredicted,
-  isLiked 
+  isLiked,
+  isAuthenticated,
 }: any) => {
   return (
     <motion.div
@@ -74,7 +73,6 @@ const TrackCard = ({
     >
       {/* Artist Info Row */}
       <div className="flex items-center gap-3 mb-4">
-        {/* Artist Photo with ring */}
         <div 
           className="w-14 h-14 rounded-full p-[3px]"
           style={{ 
@@ -83,19 +81,17 @@ const TrackCard = ({
         >
           <img 
             src={track.artist_image || track.cover_art || '/assets/logo-crown.png'} 
-            alt={track.artist_name}
+            alt={track.artistName}
             className="w-full h-full rounded-full object-cover bg-gray-800"
             onError={(e) => { (e.target as HTMLImageElement).src = '/assets/logo-crown.png'; }}
           />
         </div>
         
-        {/* Artist Name & Track Title */}
         <div className="flex-1">
-          <h3 className="text-white font-semibold text-lg">{track.artist_name}</h3>
-          <p className="text-gray-400 text-sm">{track.track_title}</p>
+          <h3 className="text-white font-semibold text-lg">{track.artistName}</h3>
+          <p className="text-gray-400 text-sm">{track.trackTitle}</p>
         </div>
 
-        {/* Certified Badge */}
         {hasPredicted && (
           <div 
             className="px-2 py-1 rounded text-xs font-bold"
@@ -111,9 +107,9 @@ const TrackCard = ({
 
       {/* Audio Player */}
       <div className="mb-4">
-        {track.audio_url || track.external_url ? (
+        {track.streamingLink ? (
           <StreamingPlayer 
-            url={track.external_url || track.audio_url} 
+            url={track.streamingLink} 
             height={80}
             showControls={true}
           />
@@ -125,7 +121,6 @@ const TrackCard = ({
       {/* Engagement Row */}
       <div className="flex items-center justify-between">
         <div className="flex gap-6">
-          {/* Like Button */}
           <button 
             onClick={() => onLike(track.id)}
             className="flex items-center gap-2 text-gray-400 hover:text-red-500 transition"
@@ -136,17 +131,15 @@ const TrackCard = ({
             <span className="text-sm">{formatCount(track.likes || 0)}</span>
           </button>
           
-          {/* Comment Button */}
           <button 
             onClick={() => onCommentClick(track)}
             className="flex items-center gap-2 text-gray-400 hover:text-blue-500 transition"
           >
             <MessageCircle className="w-5 h-5" />
-            <span className="text-sm">{formatCount(track.comments_count || 0)}</span>
+            <span className="text-sm">{formatCount(track.commentsCount || 0)}</span>
           </button>
         </div>
 
-        {/* Certify Button */}
         <motion.button
           onClick={() => onPredictClick(track)}
           disabled={hasPredicted}
@@ -170,7 +163,6 @@ const TrackCard = ({
   );
 };
 
-// Format large numbers (1200 -> 1.2K)
 const formatCount = (num: number): string => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -178,9 +170,10 @@ const formatCount = (num: number): string => {
 };
 
 // Token Balance Badge
-const TokenBadge = ({ balance }: { balance: number }) => (
-  <div 
-    className="flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold text-sm"
+const TokenBadge = ({ balance, onClick }: { balance: number; onClick?: () => void }) => (
+  <button 
+    onClick={onClick}
+    className="flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold text-sm hover:bg-gray-700 transition"
     style={{ 
       background: colors.gray800, 
       border: `1px solid ${colors.gray700}`,
@@ -189,60 +182,90 @@ const TokenBadge = ({ balance }: { balance: number }) => (
   >
     <span>{balance}</span>
     <span className="text-orange-400">FT</span>
+  </button>
+);
+
+// Login Prompt Component
+const LoginPrompt = () => (
+  <div className="mx-4 mb-4 p-4 rounded-xl" style={{ background: colors.gray800, border: `1px solid ${colors.gray700}` }}>
+    <p className="text-gray-300 text-sm mb-3">Sign in to certify tracks, earn tokens, and save your progress!</p>
+    <a href={getLoginUrl()}>
+      <Button className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700">
+        <LogIn className="w-4 h-4 mr-2" />
+        Sign In to Earn Tokens
+      </Button>
+    </a>
   </div>
 );
 
 // Main Feed Component
 export default function Feed() {
-  const [userId, setUserId] = useState<string>('demo-user-' + Date.now());
-  const [tracks, setTracks] = useState<any[]>([]);
+  const [, setLocation] = useLocation();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  
   const [selectedTrack, setSelectedTrack] = useState<any>(null);
   const [commentTrack, setCommentTrack] = useState<any>(null);
   const [userPredictions, setUserPredictions] = useState<Set<number>>(new Set());
   const [userLikes, setUserLikes] = useState<Set<number>>(new Set());
-  const [isLoading, setIsLoading] = useState(true);
-  const [tokenBalance, setTokenBalance] = useState(50);
 
-  useEffect(() => {
-    // Check for saved avatar, redirect if not set
-    const savedAvatar = localStorage.getItem('selectedAvatar');
-    if (!savedAvatar) {
-      // For now, just continue - can redirect to /avatar later
-    }
+  // Fetch submissions from tRPC
+  const { data: tracks, isLoading: tracksLoading, refetch: refetchTracks } = trpc.submissions.list.useQuery({
+    status: 'approved',
+    limit: 20,
+  });
 
-    // Fetch tracks
-    const fetchTracks = async () => {
-      const { data, error } = await supabase
-        .from('submissions')
-        .select('*')
-        .eq('status', 'approved')
-        .order('submitted_at', { ascending: false })
-        .limit(20);
+  // Fetch user profile (token balance, etc.)
+  const { data: profile, refetch: refetchProfile } = trpc.user.getProfile.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
-      if (error) {
-        console.error('Error fetching tracks:', error);
-      } else {
-        setTracks(data || []);
+  // Fetch user's likes
+  const { data: likesData } = trpc.likes.getUserLikes.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+
+  // Mutations
+  const likeMutation = trpc.likes.toggle.useMutation({
+    onSuccess: () => {
+      refetchTracks();
+    },
+  });
+
+  const predictionMutation = trpc.predictions.create.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        refetchProfile();
+        refetchTracks();
+        toast.success('Prediction locked! +5 FT earned');
+      } else if (data.error === 'already_predicted') {
+        toast.error('You already certified this track');
       }
-      setIsLoading(false);
-    };
+    },
+    onError: () => {
+      toast.error('Failed to submit prediction');
+    },
+  });
 
-    fetchTracks();
+  // Update user likes when data changes
+  useEffect(() => {
+    if (likesData) {
+      setUserLikes(new Set(likesData));
+    }
+  }, [likesData]);
 
-    // Real-time subscription for new tracks
-    const subscription = supabase
-      .channel('tracks_feed')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, () => {
-        fetchTracks();
-      })
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+  // Check if user needs to select avatar
+  useEffect(() => {
+    if (isAuthenticated && profile && !profile.hasCompletedOnboarding) {
+      // Redirect to avatar selection
+      setLocation('/avatar');
+    }
+  }, [isAuthenticated, profile, setLocation]);
 
   const handlePredictClick = (track: any) => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to certify tracks');
+      return;
+    }
     setSelectedTrack(track);
   };
 
@@ -251,6 +274,11 @@ export default function Feed() {
   };
 
   const handleLike = async (trackId: number) => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to like tracks');
+      return;
+    }
+
     const isCurrentlyLiked = userLikes.has(trackId);
     
     // Optimistic update
@@ -264,44 +292,43 @@ export default function Feed() {
       return newSet;
     });
 
-    setTracks(prev => prev.map(t => 
-      t.id === trackId 
-        ? { ...t, likes: (t.likes || 0) + (isCurrentlyLiked ? -1 : 1) }
-        : t
-    ));
+    likeMutation.mutate({ submissionId: trackId });
+  };
 
-    // Update in database
-    const track = tracks.find(t => t.id === trackId);
-    if (track) {
-      await supabase
-        .from('submissions')
-        .update({ likes: (track.likes || 0) + (isCurrentlyLiked ? -1 : 1) })
-        .eq('id', trackId);
+  const handlePredictionSubmit = async (trackId: number, scores: any) => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to certify tracks');
+      return;
     }
+
+    predictionMutation.mutate({
+      submissionId: trackId,
+      hookStrength: scores.hookStrength,
+      originality: scores.originality,
+      productionQuality: scores.productionQuality,
+    });
+
+    setUserPredictions(prev => new Set(prev).add(trackId));
+    setSelectedTrack(null);
   };
 
-  const handlePredictionSubmit = (trackId: number, scores: any) => {
-    setUserPredictions(prev => new Set(prev).add(trackId));
-    setTokenBalance(prev => prev + 5); // Award tokens for prediction
-    toast.success('Prediction locked! +5 FT earned');
-  };
+  const tokenBalance = profile?.tokenBalance ?? 50;
+  const isLoading = authLoading || tracksLoading;
 
   return (
     <div 
       className="min-h-screen flex flex-col pb-24"
       style={{ background: colors.gray900 }}
     >
-      {/* Header - matching mockup */}
+      {/* Header */}
       <header 
         className="sticky top-0 z-40 p-4 flex items-center justify-between"
         style={{ background: colors.gray900 }}
       >
-        {/* Menu */}
         <button className="p-2 -ml-2">
           <Menu className="w-6 h-6 text-gray-400" />
         </button>
 
-        {/* Logo */}
         <div className="flex flex-col items-center">
           <img 
             src="/assets/frequency-crown.png" 
@@ -319,26 +346,41 @@ export default function Feed() {
           </h1>
         </div>
 
-        {/* Token Balance & Notifications */}
         <div className="flex items-center gap-2">
-          <TokenBadge balance={tokenBalance} />
+          {isAuthenticated ? (
+            <TokenBadge 
+              balance={tokenBalance} 
+              onClick={() => setLocation('/rewards')}
+            />
+          ) : (
+            <a href={getLoginUrl()}>
+              <Button size="sm" variant="outline" className="text-orange-400 border-orange-400 hover:bg-orange-400/10">
+                <LogIn className="w-4 h-4 mr-1" />
+                Sign In
+              </Button>
+            </a>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 pt-2">
-        {/* Section Header */}
         <h2 className="text-white font-semibold text-xl px-4 mb-4">
-          Personalized feed
+          {isAuthenticated ? 'Personalized feed' : 'Trending tracks'}
         </h2>
+
+        {/* Login Prompt for non-authenticated users */}
+        {!isAuthenticated && !authLoading && (
+          <LoginPrompt />
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full" />
           </div>
-        ) : tracks.length > 0 ? (
+        ) : tracks && tracks.length > 0 ? (
           <div>
-            {tracks.map(track => (
+            {tracks.map((track: any) => (
               <TrackCard 
                 key={track.id} 
                 track={track} 
@@ -347,6 +389,7 @@ export default function Feed() {
                 onLike={handleLike}
                 hasPredicted={userPredictions.has(track.id)}
                 isLiked={userLikes.has(track.id)}
+                isAuthenticated={isAuthenticated}
               />
             ))}
           </div>
@@ -365,7 +408,7 @@ export default function Feed() {
             track={selectedTrack} 
             onClose={() => setSelectedTrack(null)} 
             onPredict={handlePredictionSubmit}
-            userId={userId} 
+            userId={user?.id?.toString() || 'guest'} 
           />
         )}
       </AnimatePresence>
@@ -376,7 +419,7 @@ export default function Feed() {
           <CommentsModal
             track={commentTrack}
             onClose={() => setCommentTrack(null)}
-            userId={userId}
+            userId={user?.id?.toString() || 'guest'}
           />
         )}
       </AnimatePresence>

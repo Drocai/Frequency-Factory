@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Play, Clock, Zap, Calendar, ExternalLink, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ExternalLink, LogIn } from 'lucide-react';
 import { useLocation } from 'wouter';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { getLoginUrl } from '@/const';
+import { Button } from '@/components/ui/button';
 
 // Design system colors
 const colors = {
@@ -23,8 +26,8 @@ const colors = {
 interface QueueItem {
   id: number;
   position: number;
-  artist_name: string;
-  track_title: string;
+  artistName: string;
+  trackTitle: string;
   genre: string;
   eta: string;
   ticket: string;
@@ -44,13 +47,27 @@ const StatCard = ({ label, value, subLabel }: { label: string; value: string | n
 );
 
 // Queue Row Component
-const QueueRow = ({ item, onSkip, userTokens }: { item: QueueItem; onSkip: (id: number) => void; userTokens: number }) => {
+const QueueRow = ({ 
+  item, 
+  onSkip, 
+  userTokens, 
+  isAuthenticated,
+  isSkipping 
+}: { 
+  item: QueueItem; 
+  onSkip: (id: number) => void; 
+  userTokens: number;
+  isAuthenticated: boolean;
+  isSkipping: boolean;
+}) => {
   const statusColors = {
     queued: colors.gray600,
     up_next: colors.blueToken,
     processing: colors.primary,
     done: '#10B981',
   };
+
+  const canSkip = isAuthenticated && userTokens >= 10 && item.status === 'queued';
 
   return (
     <motion.div
@@ -69,8 +86,8 @@ const QueueRow = ({ item, onSkip, userTokens }: { item: QueueItem; onSkip: (id: 
 
       {/* Track Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-white font-medium truncate">{item.artist_name}</p>
-        <p className="text-gray-400 text-sm truncate">{item.track_title}</p>
+        <p className="text-white font-medium truncate">{item.artistName}</p>
+        <p className="text-gray-400 text-sm truncate">{item.trackTitle}</p>
       </div>
 
       {/* ETA */}
@@ -96,17 +113,18 @@ const QueueRow = ({ item, onSkip, userTokens }: { item: QueueItem; onSkip: (id: 
         {item.status === 'queued' && (
           <motion.button
             onClick={() => onSkip(item.id)}
-            disabled={userTokens < 10}
+            disabled={!canSkip || isSkipping}
             className="px-3 py-2 rounded-lg text-sm font-medium"
             style={{ 
-              background: userTokens >= 10 ? colors.teal : colors.gray600,
-              color: userTokens >= 10 ? colors.white : colors.textSecondary,
-              cursor: userTokens >= 10 ? 'pointer' : 'not-allowed',
+              background: canSkip ? colors.teal : colors.gray600,
+              color: canSkip ? colors.white : colors.textSecondary,
+              cursor: canSkip ? 'pointer' : 'not-allowed',
+              opacity: isSkipping ? 0.7 : 1,
             }}
-            whileHover={userTokens >= 10 ? { scale: 1.05 } : {}}
-            whileTap={userTokens >= 10 ? { scale: 0.95 } : {}}
+            whileHover={canSkip && !isSkipping ? { scale: 1.05 } : {}}
+            whileTap={canSkip && !isSkipping ? { scale: 0.95 } : {}}
           >
-            Pay for Skip
+            {isSkipping ? 'Skipping...' : 'Pay for Skip'}
           </motion.button>
         )}
       </div>
@@ -116,87 +134,68 @@ const QueueRow = ({ item, onSkip, userTokens }: { item: QueueItem; onSkip: (id: 
 
 export default function FactoryMonitor() {
   const [, setLocation] = useLocation();
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [userTokens, setUserTokens] = useState(50);
-  const [stats, setStats] = useState({
-    nowPlaying: '—',
-    avgWait: '—',
-    skipsPurchased: 0,
-    weekendSpots: 5,
-  });
+  const { isAuthenticated } = useAuth();
   const [highlightMine, setHighlightMine] = useState(false);
+  const [skipsPurchased, setSkipsPurchased] = useState(0);
 
-  useEffect(() => {
-    // Fetch queue from Supabase
-    const fetchQueue = async () => {
-      const { data, error } = await supabase
-        .from('submissions')
-        .select('id, artist_name, track_title, genre, submitted_at, status')
-        .in('status', ['pending', 'approved'])
-        .order('submitted_at', { ascending: true })
-        .limit(20);
+  // Fetch queue from tRPC
+  const { data: queueData, refetch: refetchQueue } = trpc.submissions.getQueue.useQuery();
 
-      if (data) {
-        const queueItems: QueueItem[] = data.map((item, index) => ({
-          id: item.id,
-          position: index + 1,
-          artist_name: item.artist_name,
-          track_title: item.track_title,
-          genre: item.genre || 'Unknown',
-          eta: `${Math.floor((index + 1) * 3.5)}:00`,
-          ticket: `#${1000 + item.id}`,
-          status: index === 0 ? 'processing' : index < 3 ? 'up_next' : 'queued',
-        }));
-        setQueue(queueItems);
+  // Fetch user profile for token balance
+  const { data: profile, refetch: refetchProfile } = trpc.user.getProfile.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
-        if (queueItems.length > 0) {
-          setStats(prev => ({
-            ...prev,
-            nowPlaying: `${queueItems[0].artist_name} - ${queueItems[0].track_title}`.slice(0, 30),
-            avgWait: `${Math.floor(queueItems.length * 3.5 / 2)}:00`,
-          }));
-        }
+  // Skip queue mutation
+  const skipMutation = trpc.submissions.skipQueue.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success('Skip purchased! You moved up in the queue. -10 FT');
+        setSkipsPurchased(prev => prev + 1);
+        refetchQueue();
+        refetchProfile();
+      } else if (data.error === 'insufficient_balance') {
+        toast.error('Not enough tokens! Need 10 FT to skip.');
       }
-    };
+    },
+    onError: (error) => {
+      toast.error('Failed to skip: ' + error.message);
+    },
+  });
 
-    fetchQueue();
+  // Transform queue data
+  const queue: QueueItem[] = (queueData || []).map((item: any, index: number) => ({
+    id: item.id,
+    position: index + 1,
+    artistName: item.artistName,
+    trackTitle: item.trackTitle,
+    genre: item.genre || 'Unknown',
+    eta: `${Math.floor((index + 1) * 3.5)}:00`,
+    ticket: item.ticketNumber || `#${1000 + item.id}`,
+    status: index === 0 ? 'processing' : index < 3 ? 'up_next' : 'queued',
+  }));
 
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel('queue_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, () => {
-        fetchQueue();
-      })
-      .subscribe();
+  const userTokens = profile?.tokenBalance ?? 0;
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+  const stats = {
+    nowPlaying: queue.length > 0 ? `${queue[0].artistName} - ${queue[0].trackTitle}`.slice(0, 30) : '—',
+    avgWait: queue.length > 0 ? `${Math.floor(queue.length * 3.5 / 2)}:00` : '—',
+    skipsPurchased,
+    weekendSpots: 5,
+  };
 
   const handleSkip = async (trackId: number) => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to skip queue');
+      return;
+    }
+
     if (userTokens < 10) {
       toast.error('Not enough tokens! Need 10 FT to skip.');
       return;
     }
 
-    // Deduct tokens
-    setUserTokens(prev => prev - 10);
-    setStats(prev => ({ ...prev, skipsPurchased: prev.skipsPurchased + 1 }));
-
-    // Move track up in queue (optimistic update)
-    setQueue(prev => {
-      const index = prev.findIndex(item => item.id === trackId);
-      if (index > 1) {
-        const newQueue = [...prev];
-        const [item] = newQueue.splice(index, 1);
-        newQueue.splice(1, 0, item); // Move to position 2 (after currently playing)
-        return newQueue.map((q, i) => ({ ...q, position: i + 1 }));
-      }
-      return prev;
-    });
-
-    toast.success('Skip purchased! You moved up in the queue.');
+    skipMutation.mutate({ submissionId: trackId });
   };
 
   return (
@@ -215,12 +214,21 @@ export default function FactoryMonitor() {
             Queue {queue.length}
           </span>
         </div>
-        <div 
-          className="px-3 py-1 rounded-full text-sm font-bold"
-          style={{ background: colors.gray700, color: colors.white }}
-        >
-          {userTokens} FT
-        </div>
+        {isAuthenticated ? (
+          <div 
+            className="px-3 py-1 rounded-full text-sm font-bold"
+            style={{ background: colors.gray700, color: colors.white }}
+          >
+            {userTokens} FT
+          </div>
+        ) : (
+          <a href={getLoginUrl()}>
+            <Button size="sm" variant="outline" className="text-orange-400 border-orange-400 hover:bg-orange-400/10">
+              <LogIn className="w-4 h-4 mr-1" />
+              Sign In
+            </Button>
+          </a>
+        )}
       </header>
 
       {/* Stats Row */}
@@ -230,6 +238,19 @@ export default function FactoryMonitor() {
         <StatCard label="Skips Purchased" value={stats.skipsPurchased} subLabel="Today" />
         <StatCard label="Weekend Bracket" value={stats.weekendSpots} subLabel="Spots Left" />
       </div>
+
+      {/* Login Prompt for non-authenticated users */}
+      {!isAuthenticated && (
+        <div className="mx-4 mb-4 p-4 rounded-xl" style={{ background: colors.gray800, border: `1px solid ${colors.gray700}` }}>
+          <p className="text-gray-300 text-sm mb-3">Sign in to skip queue and manage your submissions!</p>
+          <a href={getLoginUrl()}>
+            <Button className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700">
+              <LogIn className="w-4 h-4 mr-2" />
+              Sign In (10 FT to Skip)
+            </Button>
+          </a>
+        </div>
+      )}
 
       {/* Conveyor Order Explanation */}
       <div className="mx-4 p-3 rounded-lg" style={{ background: colors.gray800 }}>
@@ -273,6 +294,8 @@ export default function FactoryMonitor() {
                 item={item} 
                 onSkip={handleSkip}
                 userTokens={userTokens}
+                isAuthenticated={isAuthenticated}
+                isSkipping={skipMutation.isPending}
               />
             ))}
           </>

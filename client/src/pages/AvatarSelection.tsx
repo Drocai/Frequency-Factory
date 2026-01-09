@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'wouter';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { toast } from 'sonner';
 
 // Avatar data matching the mockup
 const avatars = [
-  { id: 'beatmaster', name: 'BeatMaster', color: '#1E90FF', tier: 'silver', description: 'The rhythm architect' },
-  { id: 'synthqueen', name: 'SynthQueen', color: '#FF4500', tier: 'gold', description: 'Electronic royalty' },
-  { id: 'synthqueen2', name: 'SynthQueen', color: '#FF6B35', tier: 'gold', description: 'Synth wave master' },
-  { id: 'dj_pulse', name: 'DJ_Pulse', color: '#9B30FF', tier: 'silver', description: 'Bass drop specialist' },
-  { id: 'audiophreak', name: 'AudioPhreak', color: '#32CD32', tier: 'silver', description: 'Sound explorer' },
-  { id: 'freq_factory', name: 'Freq_Factory', color: '#9ACD32', tier: 'silver', description: 'Factory original' },
+  { id: 1, name: 'BeatMaster', color: '#1E90FF', tier: 'silver', description: 'The rhythm architect' },
+  { id: 2, name: 'SynthQueen', color: '#FF4500', tier: 'gold', description: 'Electronic royalty' },
+  { id: 3, name: 'VoxMaster', color: '#FF6B35', tier: 'gold', description: 'Vocal virtuoso' },
+  { id: 4, name: 'DJ_Pulse', color: '#9B30FF', tier: 'silver', description: 'Bass drop specialist' },
+  { id: 5, name: 'AudioPhreak', color: '#32CD32', tier: 'silver', description: 'Sound explorer' },
+  { id: 6, name: 'Freq_Factory', color: '#9ACD32', tier: 'silver', description: 'Factory original' },
 ];
 
 // Gear frame SVG component
@@ -26,7 +29,6 @@ const GearFrame = ({ color, tier, isSelected, children }: { color: string; tier:
       whileTap={{ scale: 0.95 }}
       animate={isSelected ? { scale: 1.1 } : { scale: 1 }}
     >
-      {/* Outer gear frame */}
       <div 
         className="relative w-28 h-28 md:w-36 md:h-36"
         style={{
@@ -38,7 +40,6 @@ const GearFrame = ({ color, tier, isSelected, children }: { color: string; tier:
             : `0 4px 20px rgba(0,0,0,0.5)`,
         }}
       >
-        {/* Gear teeth - simplified CSS version */}
         <div 
           className="absolute inset-0"
           style={{
@@ -55,7 +56,6 @@ const GearFrame = ({ color, tier, isSelected, children }: { color: string; tier:
           }}
         />
         
-        {/* Inner circle */}
         <div 
           className="absolute inset-2 rounded-full flex items-center justify-center"
           style={{
@@ -67,7 +67,6 @@ const GearFrame = ({ color, tier, isSelected, children }: { color: string; tier:
         </div>
       </div>
       
-      {/* Selection ring */}
       {isSelected && (
         <motion.div
           className="absolute -inset-2 rounded-full"
@@ -86,7 +85,6 @@ const GearFrame = ({ color, tier, isSelected, children }: { color: string; tier:
 // Crown logo SVG with color
 const CrownLogo = ({ color }: { color: string }) => (
   <svg viewBox="0 0 100 80" className="w-16 h-12 md:w-20 md:h-16">
-    {/* Waveform crown shape */}
     <defs>
       <linearGradient id={`crown-${color.replace('#', '')}`} x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor={color} stopOpacity="0.8" />
@@ -102,14 +100,12 @@ const CrownLogo = ({ color }: { color: string }) => (
       </filter>
     </defs>
     
-    {/* Main crown waveform */}
     <path
       d="M10 60 L10 45 Q20 50 25 35 Q30 20 35 40 Q40 55 50 15 Q60 55 65 40 Q70 20 75 35 Q80 50 90 45 L90 60 Z"
       fill={`url(#crown-${color.replace('#', '')})`}
       filter="url(#glow)"
     />
     
-    {/* Inner waveform lines */}
     <path
       d="M15 55 Q25 45 30 38 Q40 50 50 20 Q60 50 70 38 Q75 45 85 55"
       fill="none"
@@ -118,7 +114,6 @@ const CrownLogo = ({ color }: { color: string }) => (
       opacity="0.6"
     />
     
-    {/* Text */}
     <text x="50" y="72" textAnchor="middle" fill={color} fontSize="8" fontFamily="Rajdhani, sans-serif" fontWeight="bold">
       FREQUENCY FACTORY
     </text>
@@ -126,20 +121,53 @@ const CrownLogo = ({ color }: { color: string }) => (
 );
 
 export default function AvatarSelection() {
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+  const [selectedAvatarId, setSelectedAvatarId] = useState<number | null>(null);
   const [, setLocation] = useLocation();
+  const { isAuthenticated } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSelect = (avatarId: string) => {
-    setSelectedAvatar(avatarId);
+  // tRPC mutation for updating avatar
+  const updateAvatarMutation = trpc.user.updateAvatar.useMutation({
+    onSuccess: () => {
+      toast.success('Avatar selected! Welcome to the Factory!');
+      setLocation('/feed');
+    },
+    onError: (error) => {
+      toast.error('Failed to save avatar: ' + error.message);
+      setIsSubmitting(false);
+    },
+  });
+
+  const handleSelect = (avatarId: number) => {
+    setSelectedAvatarId(avatarId);
   };
 
-  const handleConfirm = () => {
-    if (selectedAvatar) {
-      // Save to localStorage for now (will integrate with user profile later)
-      localStorage.setItem('selectedAvatar', selectedAvatar);
+  const handleConfirm = async () => {
+    if (!selectedAvatarId) return;
+
+    const avatar = avatars.find(a => a.id === selectedAvatarId);
+    if (!avatar) return;
+
+    setIsSubmitting(true);
+
+    if (isAuthenticated) {
+      // Save to database via tRPC
+      updateAvatarMutation.mutate({
+        avatarId: avatar.id,
+        avatarName: avatar.name,
+      });
+    } else {
+      // Save to localStorage for non-authenticated users
+      localStorage.setItem('selectedAvatar', JSON.stringify({
+        id: avatar.id,
+        name: avatar.name,
+        color: avatar.color,
+      }));
       setLocation('/feed');
     }
   };
+
+  const selectedAvatar = avatars.find(a => a.id === selectedAvatarId);
 
   return (
     <div 
@@ -160,6 +188,11 @@ export default function AvatarSelection() {
         }}
       />
 
+      {/* Title */}
+      <h1 className="relative z-10 text-2xl md:text-3xl font-bold text-white mb-8 tracking-widest">
+        CHOOSE YOUR VIBE-ATAR
+      </h1>
+
       {/* Avatar Grid */}
       <div className="relative z-10 grid grid-cols-3 gap-4 md:gap-8 mb-8">
         {avatars.map((avatar) => (
@@ -167,7 +200,7 @@ export default function AvatarSelection() {
             <GearFrame 
               color={avatar.color} 
               tier={avatar.tier as 'silver' | 'gold'}
-              isSelected={selectedAvatar === avatar.id}
+              isSelected={selectedAvatarId === avatar.id}
             >
               <div onClick={() => handleSelect(avatar.id)}>
                 <CrownLogo color={avatar.color} />
@@ -176,8 +209,8 @@ export default function AvatarSelection() {
             <p 
               className="mt-3 text-sm md:text-base font-medium tracking-wide"
               style={{ 
-                color: selectedAvatar === avatar.id ? avatar.color : '#A0A0A0',
-                textShadow: selectedAvatar === avatar.id ? `0 0 10px ${avatar.color}` : 'none',
+                color: selectedAvatarId === avatar.id ? avatar.color : '#A0A0A0',
+                textShadow: selectedAvatarId === avatar.id ? `0 0 10px ${avatar.color}` : 'none',
               }}
             >
               {avatar.name}
@@ -189,27 +222,29 @@ export default function AvatarSelection() {
       {/* Choose Button */}
       <motion.button
         onClick={handleConfirm}
-        disabled={!selectedAvatar}
+        disabled={!selectedAvatarId || isSubmitting}
         className="relative px-12 py-4 rounded-lg font-bold text-lg tracking-widest uppercase"
         style={{
-          background: selectedAvatar 
+          background: selectedAvatarId 
             ? 'linear-gradient(135deg, #1E90FF 0%, #00BFFF 100%)'
             : 'linear-gradient(135deg, #333 0%, #222 100%)',
-          color: selectedAvatar ? '#FFFFFF' : '#666',
+          color: selectedAvatarId ? '#FFFFFF' : '#666',
           border: '2px solid',
-          borderColor: selectedAvatar ? '#1E90FF' : '#333',
-          boxShadow: selectedAvatar 
+          borderColor: selectedAvatarId ? '#1E90FF' : '#333',
+          boxShadow: selectedAvatarId 
             ? '0 0 20px rgba(30, 144, 255, 0.5), inset 0 0 20px rgba(30, 144, 255, 0.2)'
             : 'none',
-          cursor: selectedAvatar ? 'pointer' : 'not-allowed',
+          cursor: selectedAvatarId ? 'pointer' : 'not-allowed',
+          opacity: isSubmitting ? 0.7 : 1,
         }}
-        whileHover={selectedAvatar ? { scale: 1.05 } : {}}
-        whileTap={selectedAvatar ? { scale: 0.95 } : {}}
+        whileHover={selectedAvatarId && !isSubmitting ? { scale: 1.05 } : {}}
+        whileTap={selectedAvatarId && !isSubmitting ? { scale: 0.95 } : {}}
       >
-        <span className="relative z-10">CHOOSE YOUR AVATAR</span>
+        <span className="relative z-10">
+          {isSubmitting ? 'SAVING...' : 'CHOOSE YOUR AVATAR'}
+        </span>
         
-        {/* Animated border */}
-        {selectedAvatar && (
+        {selectedAvatarId && !isSubmitting && (
           <motion.div
             className="absolute inset-0 rounded-lg"
             style={{
@@ -234,10 +269,20 @@ export default function AvatarSelection() {
       {/* Helper text */}
       <p className="mt-4 text-gray-500 text-sm text-center">
         {selectedAvatar 
-          ? `Selected: ${avatars.find(a => a.id === selectedAvatar)?.name}`
+          ? `Selected: ${selectedAvatar.name} - ${selectedAvatar.description}`
           : 'Tap an avatar to select your vibe-atar'
         }
       </p>
+
+      {/* Skip option for non-authenticated users */}
+      {!isAuthenticated && (
+        <button 
+          onClick={() => setLocation('/feed')}
+          className="mt-6 text-gray-600 text-sm hover:text-gray-400 transition"
+        >
+          Skip for now →
+        </button>
+      )}
     </div>
   );
 }

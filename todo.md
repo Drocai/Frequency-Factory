@@ -210,3 +210,60 @@ Based on user's reference images, implementing full mobile-friendly experience:
 - [x] External link button to open in platform
 - [ ] Update FactoryMonitor to use real audio (optional)
 - [ ] Update LiveOverlay to show currently playing track (optional)
+
+
+---
+
+## 🔐 NEW: User Authentication Implementation (Jan 8, 2026)
+
+### Database Schema Updates
+- [x] Add tokenBalance column to users table (default 50)
+- [x] Add avatarId column to users table
+- [x] Add avatarName column to users table
+- [x] Create token_transactions table for history
+- [x] Create submissions table for track submissions
+- [x] Create predictions table for user predictions
+- [x] Create comments table
+- [x] Create likes table
+- [x] Run database migration (pnpm db:push)
+
+### tRPC Procedures
+- [x] Create user.getProfile procedure (returns user with token balance)
+- [x] Create user.updateAvatar procedure (save avatar selection)
+- [x] Create tokens.getBalance procedure
+- [x] Create tokens.award procedure (add tokens for actions)
+- [x] Create tokens.spend procedure (deduct tokens for skip)
+- [x] Create tokens.getHistory procedure
+- [x] Create submissions.create procedure
+- [x] Create submissions.list procedure
+- [x] Create submissions.getQueue procedure
+- [x] Create submissions.skipQueue procedure
+- [x] Create predictions.create procedure
+- [x] Create comments.create procedure
+- [x] Create comments.list procedure
+- [x] Create likes.toggle procedure
+
+### Frontend Integration
+- [x] Update useAuth hook to fetch full user profile
+- [x] Replace localStorage token balance with database
+- [x] Replace localStorage avatar with database
+- [x] Update Feed header to show real token balance
+- [x] Update AvatarSelection to save to database
+- [x] Update Submit to award tokens via API
+- [x] Update FactoryMonitor skip to deduct tokens via API
+- [x] Update PredictionModal to award tokens via API
+- [x] Update CommentsModal to award tokens via API
+
+### Login/Logout UI
+- [x] Add login button to Feed for unauthenticated users
+- [x] Add login prompt when trying to interact without auth
+- [x] Add logout functionality
+- [x] Show user avatar in header when logged in
+- [ ] Update Profile page to show real user data (optional)
+
+### Testing
+- [x] Test login flow end-to-end
+- [x] Test token award persistence
+- [x] Test token spend persistence
+- [x] Test avatar selection persistence
+- [x] Write unit tests for token procedures (34 tests passing)

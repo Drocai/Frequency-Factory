@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
 
 const colors = {
   primary: '#FF4500',
@@ -26,15 +24,15 @@ interface FactoryMetric {
 interface PredictionModalProps {
   track: any;
   onClose: () => void;
-  onPredict: (trackId: number, scores: { hook: number; originality: number; production: number }) => void;
+  onPredict: (trackId: number, scores: { hookStrength: number; originality: number; productionQuality: number }) => void;
   userId: string;
 }
 
 export default function PredictionModal({ track, onClose, onPredict, userId }: PredictionModalProps) {
   const [metrics, setMetrics] = useState<FactoryMetric[]>([
-    { id: 'hook', label: 'Hook Strength', description: 'How memorable and infectious is the track?', value: 25 },
-    { id: 'originality', label: 'Originality', description: 'Does it push creative boundaries?', value: 25 },
-    { id: 'production', label: 'Production Quality', description: 'Professional mixing and mastering?', value: 25 },
+    { id: 'hookStrength', label: 'Hook Strength', description: 'How memorable and infectious is the track?', value: 50 },
+    { id: 'originality', label: 'Originality', description: 'Does it push creative boundaries?', value: 50 },
+    { id: 'productionQuality', label: 'Production Quality', description: 'Professional mixing and mastering?', value: 50 },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -46,41 +44,15 @@ export default function PredictionModal({ track, onClose, onPredict, userId }: P
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    try {
-      const scores = {
-        hook: metrics.find(m => m.id === 'hook')?.value || 25,
-        originality: metrics.find(m => m.id === 'originality')?.value || 25,
-        production: metrics.find(m => m.id === 'production')?.value || 25,
-      };
+    
+    const scores = {
+      hookStrength: metrics.find(m => m.id === 'hookStrength')?.value || 50,
+      originality: metrics.find(m => m.id === 'originality')?.value || 50,
+      productionQuality: metrics.find(m => m.id === 'productionQuality')?.value || 50,
+    };
 
-      // For demo mode, skip database insert
-      if (!userId || userId.startsWith('demo-user-')) {
-        onPredict(track.id, scores);
-        onClose();
-        return;
-      }
-
-      const { error } = await supabase
-        .from('predictions')
-        .insert({ 
-          user_id: userId, 
-          track_id: track.id, 
-          prediction_type: 'factory_metrics',
-          prediction_value: scores,
-          confidence: 1.0,
-          star_rating: Math.round(overallScore / 20),
-        });
-      
-      if (error) throw error;
-      
-      onPredict(track.id, scores);
-      onClose();
-    } catch (error: any) {
-      console.error('Error submitting prediction:', error);
-      toast.error('Failed to submit prediction');
-    } finally {
-      setIsSubmitting(false);
-    }
+    // Call parent handler which handles the tRPC mutation
+    onPredict(track.id, scores);
   };
 
   return (
@@ -105,7 +77,7 @@ export default function PredictionModal({ track, onClose, onPredict, userId }: P
           <div>
             <h2 className="text-2xl font-bold text-white tracking-wide">Factory Metrics</h2>
             <p className="text-gray-400 text-sm mt-1">
-              Rate "{track.track_title}" by {track.artist_name}
+              Rate "{track.trackTitle || track.track_title}" by {track.artistName || track.artist_name}
             </p>
           </div>
           <button 
@@ -179,9 +151,10 @@ export default function PredictionModal({ track, onClose, onPredict, userId }: P
           style={{ 
             background: colors.gradientPrimary, 
             boxShadow: colors.glowRedStrong,
+            opacity: isSubmitting ? 0.7 : 1,
           }}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
+          whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
         >
           {isSubmitting ? 'CERTIFYING...' : 'CERTIFY THIS TRACK'}
         </motion.button>
