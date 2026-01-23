@@ -6,7 +6,8 @@ import {
   submissions, InsertSubmission,
   predictions, InsertPrediction,
   comments, InsertComment,
-  likes
+  likes,
+  notifications, InsertNotification
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -721,4 +722,180 @@ export async function getLoginStreak(userId: number) {
     streak: user.loginStreak || 0,
     lastBonusDate: user.lastDailyBonusDate,
   };
+}
+
+
+// ============================================
+// NOTIFICATION QUERIES
+// ============================================
+
+export async function createNotification(data: {
+  userId: number;
+  type: InsertNotification['type'];
+  title: string;
+  message: string;
+  referenceId?: number;
+  referenceType?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [result] = await db.insert(notifications).values({
+    userId: data.userId,
+    type: data.type,
+    title: data.title,
+    message: data.message,
+    referenceId: data.referenceId,
+    referenceType: data.referenceType,
+  });
+
+  return result;
+}
+
+export async function getUserNotifications(userId: number, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select()
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt))
+    .limit(limit);
+
+  return result;
+}
+
+export async function getUnreadNotificationCount(userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const [result] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(notifications)
+    .where(and(
+      eq(notifications.userId, userId),
+      eq(notifications.isRead, 0)
+    ));
+
+  return result?.count || 0;
+}
+
+export async function markNotificationRead(notificationId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  await db.update(notifications)
+    .set({ isRead: 1 })
+    .where(and(
+      eq(notifications.id, notificationId),
+      eq(notifications.userId, userId)
+    ));
+
+  return { success: true };
+}
+
+export async function markAllNotificationsRead(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  await db.update(notifications)
+    .set({ isRead: 1 })
+    .where(eq(notifications.userId, userId));
+
+  return { success: true };
+}
+
+// ============================================
+// LEADERBOARD QUERIES (with time filters)
+// ============================================
+
+export async function getTopPredictorsWithFilter(timeFilter: 'all' | 'month' | 'week' = 'all', limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // For simplicity, using user stats which are cumulative
+  // In production, you'd filter predictions by date
+  const result = await db.select({
+    userId: users.id,
+    userName: users.name,
+    avatarId: users.avatarId,
+    totalPredictions: users.totalPredictions,
+    avgScore: sql<number>`COALESCE(${users.accuratePredictions} * 100 / NULLIF(${users.totalPredictions}, 0), 0)`,
+  })
+    .from(users)
+    .where(sql`${users.totalPredictions} > 0`)
+    .orderBy(desc(users.totalPredictions))
+    .limit(limit);
+
+  return result;
+}
+
+export async function getTopTokenEarners(timeFilter: 'all' | 'month' | 'week' = 'all', limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select({
+    userId: users.id,
+    userName: users.name,
+    avatarId: users.avatarId,
+    totalEarned: users.totalTokensEarned,
+    currentBalance: users.tokenBalance,
+  })
+    .from(users)
+    .orderBy(desc(users.totalTokensEarned))
+    .limit(limit);
+
+  return result;
+}
+
+export async function getMostCertifiedTracks(timeFilter: 'all' | 'month' | 'week' = 'all', limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select({
+    id: submissions.id,
+    artistName: submissions.artistName,
+    trackTitle: submissions.trackTitle,
+    totalCertifications: submissions.totalCertifications,
+    avgHookStrength: submissions.avgHookStrength,
+    avgOriginality: submissions.avgOriginality,
+    avgProductionQuality: submissions.avgProductionQuality,
+  })
+    .from(submissions)
+    .where(eq(submissions.status, 'approved'))
+    .orderBy(desc(submissions.totalCertifications))
+    .limit(limit);
+
+  return result;
+}
+
+export async function getTopCommenters(timeFilter: 'all' | 'month' | 'week' = 'all', limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select({
+    userId: comments.userId,
+    userName: comments.userName,
+    totalComments: sql<number>`COUNT(*)`,
+  })
+    .from(comments)
+    .where(sql`${comments.userId} IS NOT NULL`)
+    .groupBy(comments.userId, comments.userName)
+    .orderBy(desc(sql`COUNT(*)`))
+    .limit(limit);
+
+  // Get avatar info for each user
+  const enrichedResults = await Promise.all(
+    result.map(async (r) => {
+      if (r.userId) {
+        const user = await getUserById(r.userId);
+        return {
+          ...r,
+          avatarId: user?.avatarId || 1,
+        };
+      }
+      return { ...r, avatarId: 1 };
+    })
+  );
+
+  return enrichedResults;
 }

@@ -166,3 +166,34 @@ export const likes = mysqlTable("likes", {
 
 export type Like = typeof likes.$inferSelect;
 export type InsertLike = typeof likes.$inferInsert;
+
+
+/**
+ * Notifications table for user notifications
+ */
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  type: mysqlEnum("type", [
+    "track_approved",
+    "track_rejected",
+    "track_certified",
+    "new_comment",
+    "tokens_earned",
+    "daily_bonus",
+    "streak_milestone",
+    "system",
+  ]).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  /** Whether notification has been read */
+  isRead: int("isRead").default(0),
+  /** Optional reference to related entity */
+  referenceId: int("referenceId"),
+  /** Reference type (submission, comment, etc.) */
+  referenceType: varchar("referenceType", { length: 32 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;

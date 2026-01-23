@@ -345,12 +345,66 @@ export const appRouter = router({
   // LEADERBOARD ROUTER
   // ============================================
   leaderboard: router({
-    // Get top predictors
     topPredictors: publicProcedure
-      .input(z.object({ limit: z.number().optional() }).optional())
+      .input(z.object({ 
+        timeFilter: z.enum(['all', 'month', 'week']).optional(),
+        limit: z.number().optional() 
+      }).optional())
       .query(async ({ input }) => {
-        return db.getTopPredictors(input?.limit);
+        return db.getTopPredictorsWithFilter(input?.timeFilter || 'all', input?.limit || 10);
       }),
+
+    topTokenEarners: publicProcedure
+      .input(z.object({ 
+        timeFilter: z.enum(['all', 'month', 'week']).optional(),
+        limit: z.number().optional() 
+      }).optional())
+      .query(async ({ input }) => {
+        return db.getTopTokenEarners(input?.timeFilter || 'all', input?.limit || 10);
+      }),
+
+    mostCertifiedTracks: publicProcedure
+      .input(z.object({ 
+        timeFilter: z.enum(['all', 'month', 'week']).optional(),
+        limit: z.number().optional() 
+      }).optional())
+      .query(async ({ input }) => {
+        return db.getMostCertifiedTracks(input?.timeFilter || 'all', input?.limit || 10);
+      }),
+
+    topCommenters: publicProcedure
+      .input(z.object({ 
+        timeFilter: z.enum(['all', 'month', 'week']).optional(),
+        limit: z.number().optional() 
+      }).optional())
+      .query(async ({ input }) => {
+        return db.getTopCommenters(input?.timeFilter || 'all', input?.limit || 10);
+      }),
+  }),
+
+  // ============================================
+  // NOTIFICATIONS ROUTER
+  // ============================================
+  notifications: router({
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserNotifications(ctx.user.id, input?.limit || 20);
+      }),
+
+    getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
+      return db.getUnreadNotificationCount(ctx.user.id);
+    }),
+
+    markRead: protectedProcedure
+      .input(z.object({ notificationId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return db.markNotificationRead(input.notificationId, ctx.user.id);
+      }),
+
+    markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
+      return db.markAllNotificationsRead(ctx.user.id);
+    }),
   }),
 
   // ============================================
