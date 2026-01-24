@@ -10,6 +10,7 @@ import PredictionModal from '@/components/PredictionModal';
 import CommentsModal from '@/components/CommentsModal';
 import ShareModal from '@/components/ShareModal';
 import DailyBonusModal from '@/components/DailyBonusModal';
+import { FeedSkeleton } from '@/components/TrackCardSkeleton';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
@@ -410,8 +411,8 @@ export default function Feed() {
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full" />
+          <div className="px-4">
+            <FeedSkeleton />
           </div>
         ) : tracks && tracks.length > 0 ? (
           <div>
