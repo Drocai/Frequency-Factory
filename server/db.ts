@@ -369,6 +369,32 @@ export async function getUserPredictionForSubmission(userId: number, submissionI
   return result.length > 0 ? result[0] : null;
 }
 
+export async function getUserPredictions(userId: number, limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get predictions with submission details
+  const result = await db.select({
+    id: predictions.id,
+    hookStrength: predictions.hookStrength,
+    originality: predictions.originality,
+    productionQuality: predictions.productionQuality,
+    overallScore: predictions.overallScore,
+    wasAccurate: predictions.wasAccurate,
+    createdAt: predictions.createdAt,
+    submissionId: predictions.submissionId,
+    trackTitle: submissions.trackTitle,
+    artistName: submissions.artistName,
+  })
+    .from(predictions)
+    .innerJoin(submissions, eq(predictions.submissionId, submissions.id))
+    .where(eq(predictions.userId, userId))
+    .orderBy(desc(predictions.createdAt))
+    .limit(limit);
+
+  return result;
+}
+
 // ============================================
 // COMMENT QUERIES
 // ============================================

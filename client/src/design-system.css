@@ -1,4 +1,5 @@
 /* Frequency Factory - Professional Design System */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
   /* Primary Colors */
@@ -78,8 +79,6 @@
 }
 
 /* Typography */
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
-
 .font-primary {
   font-family: 'Rajdhani', sans-serif;
   letter-spacing: 0.05em;

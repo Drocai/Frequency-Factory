@@ -1,84 +1,36 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { APP_LOGO, getLoginUrl } from "@/const";
-import { supabase } from "@/lib/supabase";
-import { useEffect, useState } from "react";
+import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
 import { Trophy, Target, TrendingUp, Award, LogOut } from "lucide-react";
 
-interface UserStats {
-  totalPredictions: number;
-  correctPredictions: number;
-  tokenBalance: number;
-  rank: number;
-  accuracy: number;
-}
-
-interface Prediction {
-  id: number;
-  track_title: string;
-  artist_name: string;
-  prediction_score: number;
-  created_at: string;
-  actual_score?: number;
-  status: "pending" | "correct" | "incorrect";
-}
-
 export default function Profile() {
   const { user, loading, logout } = useAuth();
-  const [stats, setStats] = useState<UserStats>({
-    totalPredictions: 0,
-    correctPredictions: 0,
-    tokenBalance: 50,
-    rank: 0,
-    accuracy: 0,
-  });
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchUserData();
-    }
-  }, [user]);
+  // Fetch user profile with real data from tRPC
+  const { data: profile, isLoading: profileLoading } = trpc.user.getProfile.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
 
-  async function fetchUserData() {
-    setIsLoading(true);
-    
-    // Fetch predictions
-    const { data: predictionsData, error } = await supabase
-      .from("predictions")
-      .select("*")
-      .eq("user_id", user?.id || "demo-user")
-      .order("created_at", { ascending: false })
-      .limit(10);
+  // Fetch user predictions with track info
+  const { data: predictions, isLoading: predictionsLoading } = trpc.predictions.list.useQuery(
+    { limit: 10 },
+    { enabled: !!user }
+  );
 
-    if (!error && predictionsData) {
-      setPredictions(predictionsData.map(p => ({
-        id: p.id,
-        track_title: "Track Title", // Would need to join with submissions table
-        artist_name: "Artist Name",
-        prediction_score: p.prediction_score,
-        created_at: p.created_at,
-        status: "pending" as const,
-      })));
+  const isLoading = profileLoading || predictionsLoading;
 
-      // Calculate stats
-      const totalPredictions = predictionsData.length;
-      const correctPredictions = Math.floor(totalPredictions * 0.7); // Mock data
-      const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
-
-      setStats({
-        totalPredictions,
-        correctPredictions,
-        tokenBalance: 50 + (correctPredictions * 5),
-        rank: Math.max(1, 100 - totalPredictions),
-        accuracy,
-      });
-    }
-
-    setIsLoading(false);
-  }
+  // Calculate stats from real profile data
+  const stats = {
+    totalPredictions: profile?.totalPredictions || 0,
+    correctPredictions: profile?.accuratePredictions || 0,
+    tokenBalance: profile?.tokenBalance || 0,
+    accuracy: profile?.totalPredictions
+      ? ((profile.accuratePredictions || 0) / profile.totalPredictions) * 100
+      : 0,
+  };
 
   async function handleLogout() {
     await logout();
@@ -131,7 +83,9 @@ export default function Profile() {
           <p className="text-gray-400">{user?.email || "demo@frequencyfactory.com"}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <div className="px-4 py-1.5 bg-gradient-to-r from-orange-500/20 to-yellow-500/20 border border-orange-500/30 rounded-full">
-              <span className="text-sm font-bold text-orange-500">Rank #{stats.rank}</span>
+              <span className="text-sm font-bold text-orange-500">
+                {profile?.avatarName || "Factory Worker"}
+              </span>
             </div>
           </div>
         </div>
@@ -170,7 +124,7 @@ export default function Profile() {
             <div className="text-center py-8">
               <div className="inline-block w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : predictions.length === 0 ? (
+          ) : !predictions || predictions.length === 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-lg p-8 text-center">
               <p className="text-gray-400 mb-4">No predictions yet</p>
               <Link href="/feed">
@@ -187,18 +141,18 @@ export default function Profile() {
                   className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex items-center justify-between"
                 >
                   <div className="flex-1">
-                    <h4 className="font-bold">{prediction.track_title}</h4>
-                    <p className="text-sm text-gray-400">{prediction.artist_name}</p>
+                    <h4 className="font-bold">{prediction.trackTitle}</h4>
+                    <p className="text-sm text-gray-400">{prediction.artistName}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {new Date(prediction.created_at).toLocaleDateString()}
+                      {new Date(prediction.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-orange-500">
-                      {prediction.prediction_score.toFixed(1)}
+                      {(prediction.overallScore / 10).toFixed(1)}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {prediction.status === "pending" ? "Pending" : prediction.status}
+                      {prediction.wasAccurate ? "Accurate" : "Pending"}
                     </div>
                   </div>
                 </div>

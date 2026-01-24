@@ -279,6 +279,13 @@ export const appRouter = router({
         const prediction = await db.getUserPredictionForSubmission(ctx.user.id, input.submissionId);
         return { hasPredicted: !!prediction, prediction };
       }),
+
+    // Get user's predictions with track info
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserPredictions(ctx.user.id, input?.limit || 10);
+      }),
   }),
 
   // ============================================
@@ -499,6 +506,69 @@ export const appRouter = router({
           throw new Error('Unauthorized: Admin access required');
         }
         return db.getRecentActivity(input?.limit);
+      }),
+  }),
+
+  // ============================================
+  // QUENCY AI CHAT ROUTER
+  // ============================================
+  quency: router({
+    chat: publicProcedure
+      .input(z.object({
+        messages: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          // Dynamic import to avoid issues if LLM module not available
+          const { invokeLLM } = await import("./_core/llm");
+
+          const systemPrompt = `You are QUENCY, the enthusiastic AI Superfan guide for Frequency Factory - a music prediction platform where users predict which tracks will become hits.
+
+Your personality:
+- Enthusiastic and supportive music superfan
+- Knowledgeable about the platform mechanics
+- Uses music-related emojis sparingly (🎵, 🔥, 💰, 🏆)
+- Keeps responses concise but helpful
+
+Key platform features you know about:
+- Token System: Users earn Frequency Tokens (FT) for predictions (+5 FT), submissions (+1 FT), comments (+1 FT), and daily logins (+1 FT base + streak bonuses)
+- Predictions: Users rate tracks on Hook Strength, Originality, and Production Quality (0-100 each)
+- Queue System: Tracks enter a queue; users can pay 10 FT to skip ahead
+- Rewards: Tokens can be redeemed for merch, Spotify Premium, badges, etc.
+- Token Tiers: Red (common), Blue (uncommon), Purple (rare), Gold (legendary)
+
+Always be helpful and encouraging. If you don't know something specific, guide users to explore the app.`;
+
+          const result = await invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...input.messages.map(m => ({
+                role: m.role as "user" | "assistant",
+                content: m.content,
+              })),
+            ],
+            maxTokens: 500,
+          });
+
+          const responseContent = result.choices[0]?.message?.content;
+          const content = typeof responseContent === "string"
+            ? responseContent
+            : Array.isArray(responseContent)
+              ? responseContent.find(c => c.type === "text")?.text || ""
+              : "";
+
+          return { success: true, content };
+        } catch (error) {
+          console.error("QUENCY chat error:", error);
+          return {
+            success: false,
+            content: "",
+            error: "Failed to get AI response"
+          };
+        }
       }),
   }),
 });

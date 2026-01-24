@@ -1,9 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { trpc } from "@/lib/trpc";
 import { MessageCircle, X, Send, Sparkles } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Streamdown } from "streamdown";
-// QUENCY uses local fallback responses for now
 
 interface Message {
   role: "user" | "assistant";
@@ -57,38 +57,49 @@ export default function QuencyChat() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<string>("");
+
+  // tRPC mutation for AI chat
+  const chatMutation = trpc.quency.chat.useMutation();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleSend = useCallback(async (messageToSend?: string) => {
+    const textToSend = messageToSend || input;
+    if (!textToSend.trim() || isLoading) return;
 
+    const userMessage: Message = { role: "user", content: textToSend };
+    const currentMessages = [...messages, userMessage];
 
-  async function handleSend() {
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = { role: "user", content: input };
-    const userInput = input;
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(currentMessages);
     setInput("");
     setIsLoading(true);
 
     try {
-      // Use intelligent fallback responses
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const responseContent = getFallbackResponse(userInput);
+      // Try AI endpoint first
+      const result = await chatMutation.mutateAsync({
+        messages: currentMessages.filter(m => m.role !== "assistant" || m.content !== QUENCY_INTRO),
+      });
 
-      setMessages((prev) => [...prev, { role: "assistant", content: responseContent }]);
+      if (result.success && result.content) {
+        setMessages(prev => [...prev, { role: "assistant", content: result.content }]);
+      } else {
+        // Use fallback if AI fails
+        const fallback = getFallbackResponse(textToSend);
+        setMessages(prev => [...prev, { role: "assistant", content: fallback }]);
+      }
     } catch (error) {
       console.error("QUENCY error:", error);
       // Use fallback on error
-      const fallback = getFallbackResponse(userInput);
-      setMessages((prev) => [...prev, { role: "assistant", content: fallback }]);
+      const fallback = getFallbackResponse(textToSend);
+      setMessages(prev => [...prev, { role: "assistant", content: fallback }]);
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [input, isLoading, messages, chatMutation]);
 
   return (
     <>
@@ -116,9 +127,9 @@ export default function QuencyChat() {
                 <p className="text-xs text-gray-400">AI Superfan Guide</p>
               </div>
             </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setIsOpen(false)}
               className="text-gray-400 hover:text-white"
             >
@@ -150,7 +161,7 @@ export default function QuencyChat() {
                 </div>
               </div>
             ))}
-            
+
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-gray-800 rounded-2xl rounded-bl-sm p-3">
@@ -170,11 +181,9 @@ export default function QuencyChat() {
             {["How do tokens work?", "How to submit?", "Skip queue?"].map((q) => (
               <button
                 key={q}
-                onClick={() => {
-                  setInput(q);
-                  setTimeout(() => handleSend(), 100);
-                }}
-                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition"
+                onClick={() => handleSend(q)}
+                disabled={isLoading}
+                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition disabled:opacity-50"
               >
                 {q}
               </button>
