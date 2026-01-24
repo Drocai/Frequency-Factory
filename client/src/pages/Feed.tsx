@@ -290,7 +290,7 @@ export default function Feed() {
     if (isAuthenticated && profile?.hasCompletedOnboarding && !dailyBonusMutation.isPending) {
       dailyBonusMutation.mutate();
     }
-  }, [isAuthenticated, profile?.hasCompletedOnboarding]);
+  }, [isAuthenticated, profile, dailyBonusMutation]);
 
   const handlePredictClick = (track: any) => {
     if (!isAuthenticated) {
