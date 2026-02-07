@@ -1,264 +1,505 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
+import { supabase, GENRES } from '@/lib/supabase';
+import { toast } from 'sonner';
+import {
+  Upload, Music, Image, X, Plus, ChevronDown, Loader2, CheckCircle,
+} from 'lucide-react';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+interface TrackDraft {
+  key: string;
+  title: string;
+  artist: string;
+  genre: string;
+  socials: string;
+  notes: string;
+  audioFile: File | null;
+  coverFile: File | null;
+  audioPreview: string | null;
+  coverPreview: string | null;
+  uploading: boolean;
+  progress: number;
+  done: boolean;
+}
+
+const emptyDraft = (): TrackDraft => ({
+  key: crypto.randomUUID(),
+  title: '',
+  artist: '',
+  genre: '',
+  socials: '',
+  notes: '',
+  audioFile: null,
+  coverFile: null,
+  audioPreview: null,
+  coverPreview: null,
+  uploading: false,
+  progress: 0,
+  done: false,
+});
+
+/* ------------------------------------------------------------------ */
+/*  DropZone                                                           */
+/* ------------------------------------------------------------------ */
+
+function DropZone({
+  accept,
+  label,
+  icon: Icon,
+  file,
+  preview,
+  onFile,
+  onClear,
+}: {
+  accept: string;
+  label: string;
+  icon: React.ElementType;
+  file: File | null;
+  preview: string | null;
+  onFile: (f: File) => void;
+  onClear: () => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const f = e.dataTransfer.files[0];
+      if (f) onFile(f);
+    },
+    [onFile],
+  );
+
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      onClick={() => !file && inputRef.current?.click()}
+      className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-all cursor-pointer ${
+        dragOver ? 'border-[#ff6d00] bg-[#ff6d00]/10' : 'border-[#333] bg-[#111] hover:border-[#ff6d00]/50'
+      }`}
+      style={{ minHeight: 140 }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={(e) => { if (e.target.files?.[0]) onFile(e.target.files[0]); }}
+      />
+
+      {file ? (
+        <div className="flex items-center gap-3 w-full">
+          {preview && accept.startsWith('image') ? (
+            <img src={preview} alt="" className="w-16 h-16 rounded-lg object-cover" />
+          ) : (
+            <div className="w-16 h-16 rounded-lg bg-[#222] flex items-center justify-center">
+              <Music className="w-6 h-6 text-[#ff6d00]" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-medium truncate">{file.name}</p>
+            <p className="text-gray-500 text-xs">{(file.size / (1024 * 1024)).toFixed(1)} MB</p>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onClear(); }}
+            className="p-1 rounded-full hover:bg-[#333] text-gray-400"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <Icon className="w-8 h-8 text-gray-500 mb-2" />
+          <p className="text-gray-400 text-sm text-center">{label}</p>
+          <p className="text-gray-600 text-xs mt-1">or click to browse</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  TrackForm                                                          */
+/* ------------------------------------------------------------------ */
+
+function TrackForm({
+  draft,
+  index,
+  onChange,
+  onRemove,
+  canRemove,
+}: {
+  draft: TrackDraft;
+  index: number;
+  onChange: (d: TrackDraft) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  const set = (patch: Partial<TrackDraft>) => onChange({ ...draft, ...patch });
+
+  const handleAudioFile = (f: File) => {
+    set({ audioFile: f, audioPreview: URL.createObjectURL(f) });
+  };
+
+  const handleCoverFile = (f: File) => {
+    set({ coverFile: f, coverPreview: URL.createObjectURL(f) });
+  };
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="rounded-2xl p-6 space-y-4"
+      style={{
+        background: 'linear-gradient(135deg, #111 0%, #0a0a0a 100%)',
+        border: draft.done ? '1px solid #22c55e' : '1px solid #222',
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-white font-semibold flex items-center gap-2">
+          {draft.done ? (
+            <CheckCircle className="w-5 h-5 text-green-500" />
+          ) : (
+            <span className="w-6 h-6 rounded-full bg-[#ff6d00] flex items-center justify-center text-xs text-black font-bold">
+              {index + 1}
+            </span>
+          )}
+          Track {index + 1}
+        </h3>
+        {canRemove && !draft.uploading && (
+          <button onClick={onRemove} className="text-gray-500 hover:text-red-400 transition">
+            <X className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* Drop zones */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <DropZone
+          accept="audio/*"
+          label="Drop audio file here"
+          icon={Upload}
+          file={draft.audioFile}
+          preview={draft.audioPreview}
+          onFile={handleAudioFile}
+          onClear={() => set({ audioFile: null, audioPreview: null })}
+        />
+        <DropZone
+          accept="image/*"
+          label="Drop cover art here"
+          icon={Image}
+          file={draft.coverFile}
+          preview={draft.coverPreview}
+          onFile={handleCoverFile}
+          onClear={() => set({ coverFile: null, coverPreview: null })}
+        />
+      </div>
+
+      {/* Fields */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input
+          type="text"
+          placeholder="Track Title *"
+          value={draft.title}
+          onChange={(e) => set({ title: e.target.value })}
+          className="w-full px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#333] text-white placeholder-gray-500 focus:border-[#ff6d00] focus:outline-none transition"
+        />
+        <input
+          type="text"
+          placeholder="Artist Name *"
+          value={draft.artist}
+          onChange={(e) => set({ artist: e.target.value })}
+          className="w-full px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#333] text-white placeholder-gray-500 focus:border-[#ff6d00] focus:outline-none transition"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="relative">
+          <select
+            value={draft.genre}
+            onChange={(e) => set({ genre: e.target.value })}
+            className="w-full px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#333] text-white appearance-none focus:border-[#ff6d00] focus:outline-none transition"
+          >
+            <option value="">Select Genre</option>
+            {GENRES.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+        </div>
+        <input
+          type="text"
+          placeholder="Socials (IG, Twitter, etc.)"
+          value={draft.socials}
+          onChange={(e) => set({ socials: e.target.value })}
+          className="w-full px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#333] text-white placeholder-gray-500 focus:border-[#ff6d00] focus:outline-none transition"
+        />
+      </div>
+
+      <textarea
+        placeholder="Notes for the A&R team..."
+        value={draft.notes}
+        onChange={(e) => set({ notes: e.target.value })}
+        rows={2}
+        className="w-full px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#333] text-white placeholder-gray-500 focus:border-[#ff6d00] focus:outline-none transition resize-none"
+      />
+
+      {/* Progress bar */}
+      {draft.uploading && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs text-gray-400">
+            <span>Uploading...</span>
+            <span>{Math.round(draft.progress)}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-[#222] overflow-hidden">
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: 'linear-gradient(90deg, #ff6d00, #ff8f33)' }}
+              initial={{ width: 0 }}
+              animate={{ width: `${draft.progress}%` }}
+              transition={{ duration: 0.3 }}
+            />
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Landing (main)                                                     */
+/* ------------------------------------------------------------------ */
 
 export default function Landing() {
-    const [, setLocation] = useLocation();
-    const [currentSection, setCurrentSection] = useState(0);
+  const [, setLocation] = useLocation();
+  const [drafts, setDrafts] = useState<TrackDraft[]>([emptyDraft()]);
+  const [submitting, setSubmitting] = useState(false);
 
-    const sections = [
-        {
-            id: 'hero',
-            content: (
-                <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-                    {/* User's actual crown logo */}
-                    <motion.img 
-                        src="/assets/frequency-crown-actual.png" 
-                        alt="Frequency Factory"
-                        className="w-80 h-80 mb-8 object-contain"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ duration: 0.8 }}
-                    />
-                    
-                    {/* Metallic FREQUENCY FACTORY text */}
-                    <h1 className="text-6xl font-bold mb-4 tracking-wider" style={{
-                        background: 'linear-gradient(180deg, #C0C0C0 0%, #808080 50%, #606060 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        textShadow: '0 2px 10px rgba(192, 192, 192, 0.3)',
-                        fontFamily: 'Impact, "Arial Black", sans-serif',
-                        letterSpacing: '0.1em'
-                    }}>
-                        FREQUENCY<br/>FACTORY
-                    </h1>
-                    
-                    <p className="text-gray-400 text-lg mb-8 max-w-md">
-                        Where raw tracks get built into hits
-                    </p>
-                    
-                    <div className="flex flex-col gap-4 w-full max-w-sm">
-                        <button 
-                            onClick={() => setLocation('/feed')}
-                            className="w-full px-8 py-4 rounded-lg font-bold tracking-wider text-white transition-all"
-                            style={{ 
-                                background: '#FF4500',
-                                boxShadow: '0 0 30px rgba(255, 69, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
-                                border: '1px solid rgba(255, 69, 0, 0.8)'
-                            }}
-                        >
-                            ENTER THE FACTORY
-                        </button>
-                        
-                        <button 
-                            onClick={() => setCurrentSection(1)}
-                            className="w-full px-8 py-4 rounded-lg font-bold tracking-wider text-gray-300 border-2 transition-all hover:bg-gray-900"
-                            style={{ borderColor: '#404040', background: 'transparent' }}
-                        >
-                            Learn More
-                        </button>
-                    </div>
-                </div>
-            )
-        },
-        {
-            id: 'quency',
-            content: (
-                <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
-                    <div className="max-w-md w-full rounded-2xl p-8 border" style={{ 
-                        background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-                        borderColor: '#404040'
-                    }}>
-                        <img 
-                            src="/assets/frequency-crown-actual.png" 
-                            alt="QUENCY"
-                            className="w-48 h-48 mx-auto mb-6 object-contain"
-                        />
-                        
-                        <h2 className="text-4xl mb-4" style={{ 
-                            color: '#8B00FF',
-                            fontFamily: 'Impact, "Arial Black", sans-serif',
-                            letterSpacing: '0.05em'
-                        }}>
-                            MEET QUENCY
-                        </h2>
-                        
-                        <p className="text-gray-300 text-lg mb-4">
-                            Your AI Superfan guide in the Frequency Factory. QUENCY hosts live streams, awards tokens, and helps you discover the next generation of hits.
-                        </p>
-                        
-                        <p className="text-gray-400 italic">
-                            "Welcome to the Factory, where frequencies become legends." - QUENCY
-                        </p>
-                    </div>
-                </div>
-            )
-        },
-        {
-            id: 'earn',
-            content: (
-                <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
-                    <div className="max-w-md w-full">
-                        <h2 className="text-3xl text-white mb-4" style={{
-                            fontFamily: 'Impact, "Arial Black", sans-serif',
-                            letterSpacing: '0.05em'
-                        }}>EARN TOKENS</h2>
-                        
-                        <p className="text-gray-300 text-lg mb-8">
-                            Correct predictions earn you Frequency Tokens (FT). Climb the leaderboard and unlock rewards.
-                        </p>
-                        
-                        <div className="rounded-2xl p-8 mb-8 border" style={{ 
-                            background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-                            borderColor: '#404040'
-                        }}>
-                            <div className="text-7xl font-bold mb-4" style={{ color: '#FFD700' }}>03</div>
-                            <h3 className="text-2xl text-white mb-4" style={{
-                                fontFamily: 'Impact, "Arial Black", sans-serif',
-                                letterSpacing: '0.05em'
-                            }}>REDEEM & FLEX</h3>
-                            <p className="text-gray-300">
-                                Use your tokens for exclusive merch, discount codes, and bragging rights as a music oracle.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )
-        },
-        {
-            id: 'tiers',
-            content: (
-                <div className="min-h-screen flex flex-col items-center justify-start px-6 py-12 overflow-y-auto">
-                    <div className="max-w-md w-full space-y-6 pb-20">
-                        {/* Red FT */}
-                        <div className="rounded-2xl p-6 border" style={{ 
-                            background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-                            borderColor: '#FF4500'
-                        }}>
-                            <img 
-                                src="/assets/frequency-crown-actual.png" 
-                                alt="Token Tiers"
-                                className="w-32 h-32 mx-auto mb-4 object-contain"
-                            />
-                            <h3 className="text-3xl mb-2" style={{ 
-                                color: '#FF4500',
-                                fontFamily: 'Impact, "Arial Black", sans-serif',
-                                letterSpacing: '0.05em'
-                            }}>RED FT</h3>
-                            <p className="text-gray-400 mb-2">Base Tier • Common</p>
-                            <p className="text-gray-300">Earned for basic predictions and engagement</p>
-                        </div>
-                        
-                        {/* Blue FT */}
-                        <div className="rounded-2xl p-6 border" style={{ 
-                            background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-                            borderColor: '#1E90FF'
-                        }}>
-                            <img 
-                                src="/assets/frequency-crown-actual.png" 
-                                alt="Token Tiers"
-                                className="w-32 h-32 mx-auto mb-4 object-contain"
-                            />
-                            <h3 className="text-3xl mb-2" style={{ 
-                                color: '#1E90FF',
-                                fontFamily: 'Impact, "Arial Black", sans-serif',
-                                letterSpacing: '0.05em'
-                            }}>BLUE FT</h3>
-                            <p className="text-gray-400 mb-2">Mid Tier • Uncommon</p>
-                            <p className="text-gray-300">Earned for accurate predictions and consistency</p>
-                        </div>
-                        
-                        {/* Purple FT */}
-                        <div className="rounded-2xl p-6 border" style={{ 
-                            background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-                            borderColor: '#8B00FF'
-                        }}>
-                            <img 
-                                src="/assets/frequency-crown-actual.png" 
-                                alt="Token Tiers"
-                                className="w-32 h-32 mx-auto mb-4 object-contain"
-                            />
-                            <h3 className="text-3xl mb-2" style={{ 
-                                color: '#8B00FF',
-                                fontFamily: 'Impact, "Arial Black", sans-serif',
-                                letterSpacing: '0.05em'
-                            }}>PURPLE FT</h3>
-                            <p className="text-gray-400 mb-2">High Tier • Rare</p>
-                            <p className="text-gray-300">Earned for exceptional prediction accuracy</p>
-                        </div>
-                        
-                        {/* Gold FT */}
-                        <div className="rounded-2xl p-6 border" style={{ 
-                            background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-                            borderColor: '#FFD700'
-                        }}>
-                            <img 
-                                src="/assets/certified-badge-actual.png" 
-                                alt="Gold FT"
-                                className="w-32 h-32 mx-auto mb-4 object-contain"
-                            />
-                            <h3 className="text-3xl mb-2" style={{ 
-                                color: '#FFD700',
-                                fontFamily: 'Impact, "Arial Black", sans-serif',
-                                letterSpacing: '0.05em'
-                            }}>GOLD FT</h3>
-                            <p className="text-gray-400 mb-2">Top Tier • Legendary</p>
-                            <p className="text-gray-300">Earned by top predictors and community legends</p>
-                        </div>
-                    </div>
-                </div>
-            )
-        }
-    ];
+  const updateDraft = (idx: number, d: TrackDraft) => {
+    setDrafts((prev) => prev.map((p, i) => (i === idx ? d : p)));
+  };
 
-    return (
-        <div 
-            className="relative" 
-            style={{ 
-                background: '#0A0A0A',
-                backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255, 69, 0, 0.05) 0%, transparent 50%)',
-            }}
-        >
-            {/* Navigation dots */}
-            {currentSection > 0 && (
-                <div className="fixed top-8 right-8 z-50 flex flex-col gap-2">
-                    {sections.map((_, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => setCurrentSection(idx)}
-                            className="w-3 h-3 rounded-full transition-all"
-                            style={{ 
-                                background: currentSection === idx ? '#FF4500' : '#404040',
-                                boxShadow: currentSection === idx ? '0 0 20px rgba(255, 69, 0, 0.6)' : 'none'
-                            }}
-                        />
-                    ))}
-                </div>
-            )}
-            
-            {/* Current section */}
-            <motion.div
-                key={currentSection}
-                initial={{ opacity: 0, x: 100 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -100 }}
-                transition={{ duration: 0.5 }}
-            >
-                {sections[currentSection].content}
-            </motion.div>
-            
-            {/* Navigation arrow */}
-            {currentSection < sections.length - 1 && currentSection > 0 && (
-                <button
-                    onClick={() => setCurrentSection(prev => Math.min(prev + 1, sections.length - 1))}
-                    className="fixed bottom-8 right-1/2 translate-x-1/2 w-16 h-16 rounded-full flex items-center justify-center border-2"
-                    style={{ background: '#1A1A1A', borderColor: '#404040' }}
-                >
-                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
-            )}
+  const removeDraft = (idx: number) => {
+    setDrafts((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addDraft = () => {
+    setDrafts((prev) => [...prev, emptyDraft()]);
+  };
+
+  /* Upload a single track */
+  const uploadTrack = async (draft: TrackDraft, idx: number): Promise<boolean> => {
+    if (!draft.audioFile || !draft.title.trim() || !draft.artist.trim()) {
+      toast.error(`Track ${idx + 1}: title, artist, and audio file are required`);
+      return false;
+    }
+
+    updateDraft(idx, { ...draft, uploading: true, progress: 10 });
+
+    try {
+      // 1. Upload audio
+      const audioPath = `${Date.now()}-${draft.audioFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error: audioErr } = await supabase.storage
+        .from('audio')
+        .upload(audioPath, draft.audioFile);
+      if (audioErr) throw audioErr;
+
+      updateDraft(idx, { ...draft, uploading: true, progress: 50 });
+
+      const { data: audioUrl } = supabase.storage.from('audio').getPublicUrl(audioPath);
+
+      // 2. Upload cover (optional)
+      let coverPublicUrl: string | null = null;
+      if (draft.coverFile) {
+        const coverPath = `${Date.now()}-${draft.coverFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error: coverErr } = await supabase.storage
+          .from('covers')
+          .upload(coverPath, draft.coverFile);
+        if (coverErr) throw coverErr;
+        const { data: cu } = supabase.storage.from('covers').getPublicUrl(coverPath);
+        coverPublicUrl = cu.publicUrl;
+      }
+
+      updateDraft(idx, { ...draft, uploading: true, progress: 80 });
+
+      // 3. Insert track row
+      const { error: insertErr } = await supabase.from('tracks').insert({
+        title: draft.title.trim(),
+        artist: draft.artist.trim(),
+        audio_url: audioUrl.publicUrl,
+        cover_url: coverPublicUrl,
+        genre: draft.genre || null,
+        socials: draft.socials.trim() || null,
+        notes: draft.notes.trim() || null,
+        status: 'pending',
+      });
+      if (insertErr) throw insertErr;
+
+      updateDraft(idx, { ...draft, uploading: false, progress: 100, done: true });
+      return true;
+    } catch (err: any) {
+      updateDraft(idx, { ...draft, uploading: false, progress: 0 });
+      toast.error(`Track ${idx + 1} failed: ${err.message}`);
+      return false;
+    }
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    let successes = 0;
+
+    for (let i = 0; i < drafts.length; i++) {
+      if (drafts[i].done) { successes++; continue; }
+      const ok = await uploadTrack(drafts[i], i);
+      if (ok) successes++;
+    }
+
+    setSubmitting(false);
+    if (successes === drafts.length) {
+      toast.success(`${successes} track${successes > 1 ? 's' : ''} submitted for review!`);
+    } else if (successes > 0) {
+      toast.info(`${successes}/${drafts.length} tracks submitted. Fix errors and retry.`);
+    }
+  };
+
+  const allDone = drafts.length > 0 && drafts.every((d) => d.done);
+
+  return (
+    <div className="min-h-screen" style={{ background: '#000' }}>
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-[#222]"
+        style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+        <div className="flex items-center gap-3">
+          <img src="/assets/frequency-crown-actual.png" alt="FF" className="w-8 h-8 object-contain" />
+          <span className="text-white font-bold tracking-wider" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+            FREQUENCY FACTORY
+          </span>
         </div>
-    );
+        <div className="flex items-center gap-4">
+          <button onClick={() => setLocation('/listen')}
+            className="text-gray-400 hover:text-white text-sm transition">Listen</button>
+          <button onClick={() => setLocation('/admin')}
+            className="text-gray-400 hover:text-white text-sm transition">Admin</button>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section className="relative flex flex-col items-center justify-center px-6 pt-16 pb-8 text-center"
+        style={{ backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(255,109,0,0.08) 0%, transparent 60%)' }}>
+        <motion.img
+          src="/assets/frequency-crown-actual.png"
+          alt="Frequency Factory"
+          className="w-48 h-48 mb-6 object-contain"
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.6 }}
+        />
+        <h1 className="text-5xl md:text-6xl font-bold mb-3 tracking-wider"
+          style={{
+            background: 'linear-gradient(180deg, #fff 0%, #aaa 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontFamily: 'Rajdhani, Impact, sans-serif',
+            letterSpacing: '0.08em',
+          }}>
+          FREQUENCY FACTORY
+        </h1>
+        <p className="text-gray-400 text-lg max-w-lg mb-2">Where raw tracks get built into hits</p>
+        <div className="h-1 w-24 mt-2 rounded-full" style={{ background: 'linear-gradient(90deg, #ff6d00, #ff8f33)' }} />
+      </section>
+
+      {/* Submission section */}
+      <section className="max-w-3xl mx-auto px-4 pb-24">
+        <h2 className="text-2xl text-white font-bold mb-6 flex items-center gap-2"
+          style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+          <Music className="w-6 h-6 text-[#ff6d00]" />
+          SUBMIT YOUR TRACK
+        </h2>
+
+        <div className="space-y-6">
+          <AnimatePresence mode="popLayout">
+            {drafts.map((d, i) => (
+              <TrackForm
+                key={d.key}
+                draft={d}
+                index={i}
+                onChange={(updated) => updateDraft(i, updated)}
+                onRemove={() => removeDraft(i)}
+                canRemove={drafts.length > 1}
+              />
+            ))}
+          </AnimatePresence>
+
+          {/* Add another track */}
+          {!allDone && (
+            <button
+              onClick={addDraft}
+              className="w-full py-3 rounded-xl border-2 border-dashed border-[#333] text-gray-400 hover:border-[#ff6d00] hover:text-[#ff6d00] transition flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              Add Another Track
+            </button>
+          )}
+
+          {/* Submit */}
+          {allDone ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center space-y-4"
+            >
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
+              <p className="text-white text-lg font-medium">All tracks submitted!</p>
+              <p className="text-gray-400 text-sm">Our A&R team will review your submission.</p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => { setDrafts([emptyDraft()]); }}
+                  className="px-6 py-3 rounded-lg bg-[#222] text-white hover:bg-[#333] transition"
+                >
+                  Submit More
+                </button>
+                <button
+                  onClick={() => setLocation('/listen')}
+                  className="px-6 py-3 rounded-lg text-white font-bold transition"
+                  style={{ background: '#ff6d00' }}
+                >
+                  Browse Approved Tracks
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="w-full py-4 rounded-xl text-white font-bold text-lg tracking-wider transition-all disabled:opacity-50"
+              style={{
+                background: 'linear-gradient(135deg, #ff6d00, #ff8f33)',
+                boxShadow: '0 0 30px rgba(255,109,0,0.4)',
+              }}
+            >
+              {submitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" /> Uploading...
+                </span>
+              ) : (
+                `SUBMIT ${drafts.length > 1 ? `${drafts.length} TRACKS` : 'TRACK'}`
+              )}
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }

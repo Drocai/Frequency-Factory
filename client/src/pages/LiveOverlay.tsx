@@ -1,252 +1,182 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
+import { supabase, type Track, type Settings } from '@/lib/supabase';
+import { Star, Music } from 'lucide-react';
 
-// Design system colors
-const colors = {
-  primary: '#FF4500',
-  primaryLight: '#FF6B35',
-  blueToken: '#1E90FF',
-  gray900: '#0A0A0A',
-  gray800: '#1A1A1A',
-  gray700: '#2A2A2A',
-  white: '#FFFFFF',
-  textSecondary: '#A0A0A0',
-};
-
-interface Track {
-  id: number;
-  artist_name: string;
-  track_title: string;
-  genre: string;
-  cover_art?: string;
-}
-
-interface Prediction {
-  id: number;
-  user_name: string;
-  prediction_value: number;
-  created_at: string;
-}
-
-// Now Playing Card
-const NowPlayingCard = ({ track }: { track: Track | null }) => (
-  <motion.div
-    className="p-4 rounded-xl"
-    style={{ 
-      background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(10, 10, 10, 0.95) 100%)',
-      border: `2px solid ${colors.primary}`,
-      boxShadow: `0 0 30px rgba(255, 69, 0, 0.3)`,
-    }}
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-  >
-    <div className="flex items-center gap-4">
-      {/* Frequency Factory Logo */}
-      <div 
-        className="w-16 h-16 rounded-lg flex items-center justify-center"
-        style={{ background: colors.gray700, border: `1px solid ${colors.gray800}` }}
-      >
-        <img src="/assets/frequency-crown.png" alt="FF" className="w-12 h-12" />
-      </div>
-
-      {/* Track Info */}
-      <div className="flex-1">
-        <h2 className="text-2xl font-bold text-white tracking-wide">
-          {track?.artist_name || 'ARTIST NAME'}
-        </h2>
-        <p className="text-gray-400">
-          {track?.track_title || 'Track Title'} — {track?.genre || 'Genre'}
-        </p>
-      </div>
-    </div>
-
-    {/* Gradient bar */}
-    <div 
-      className="h-1 mt-4 rounded-full"
-      style={{
-        background: 'linear-gradient(90deg, #FF4500 0%, #FF6B35 30%, #8B00FF 70%, #1E90FF 100%)',
-      }}
-    />
-  </motion.div>
-);
-
-// Queue Card
-const QueueCard = ({ tracks }: { tracks: Track[] }) => (
-  <motion.div
-    className="p-4 rounded-xl"
-    style={{ 
-      background: 'rgba(26, 26, 26, 0.9)',
-      border: `1px solid ${colors.gray700}`,
-    }}
-    initial={{ opacity: 0, x: 20 }}
-    animate={{ opacity: 1, x: 0 }}
-  >
-    <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
-      <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-      Up Next
-    </h3>
-    <div className="space-y-2">
-      {tracks.slice(0, 5).map((track, index) => (
-        <div key={track.id} className="flex items-center gap-3 text-sm">
-          <span className="text-gray-500 w-4">{index + 1}</span>
-          <span className="text-white truncate flex-1">{track.artist_name}</span>
-          <span className="text-gray-400 truncate">{track.track_title}</span>
-        </div>
-      ))}
-    </div>
-  </motion.div>
-);
-
-// Live Predictions Card
-const LivePredictionsCard = ({ predictions }: { predictions: Prediction[] }) => (
-  <motion.div
-    className="p-4 rounded-xl"
-    style={{ 
-      background: 'rgba(26, 26, 26, 0.9)',
-      border: `1px solid ${colors.gray700}`,
-    }}
-    initial={{ opacity: 0, x: -20 }}
-    animate={{ opacity: 1, x: 0 }}
-  >
-    <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
-      <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-      Live Predictions
-    </h3>
-    <div className="space-y-2">
-      <AnimatePresence mode="popLayout">
-        {predictions.slice(0, 5).map((pred) => (
-          <motion.div
-            key={pred.id}
-            className="flex items-center justify-between text-sm"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-          >
-            <span className="text-gray-400">{pred.user_name}</span>
-            <span 
-              className="font-bold"
-              style={{ color: colors.primaryLight }}
-            >
-              {pred.prediction_value}/10
-            </span>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  </motion.div>
-);
-
-// Top Predictors Leaderboard
-const LeaderboardCard = ({ leaders }: { leaders: { name: string; score: number; tokens: number }[] }) => (
-  <motion.div
-    className="p-4 rounded-xl"
-    style={{ 
-      background: 'rgba(26, 26, 26, 0.9)',
-      border: `1px solid ${colors.gray700}`,
-    }}
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-  >
-    <h3 className="text-lg font-bold text-white mb-3">🏆 Top Predictors</h3>
-    <div className="space-y-2">
-      {leaders.map((leader, index) => (
-        <div key={leader.name} className="flex items-center gap-3 text-sm">
-          <span 
-            className="w-6 h-6 rounded-full flex items-center justify-center font-bold"
-            style={{ 
-              background: index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : index === 2 ? '#CD7F32' : colors.gray700,
-              color: index < 3 ? '#000' : '#fff',
-            }}
-          >
-            {index + 1}
-          </span>
-          <span className="text-white flex-1">{leader.name}</span>
-          <span className="text-gray-400">{leader.tokens} FT</span>
-        </div>
-      ))}
-    </div>
-  </motion.div>
-);
+/* ------------------------------------------------------------------ */
+/*  OBS Overlay — /overlay                                             */
+/*                                                                     */
+/*  Reads current_track_id from the settings table.                    */
+/*  Subscribes to Realtime for live updates.                           */
+/*  Transparent background for chroma key compositing in OBS.          */
+/* ------------------------------------------------------------------ */
 
 export default function LiveOverlay() {
-  const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
-  const [queue, setQueue] = useState<Track[]>([]);
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
-  const [leaders, setLeaders] = useState([
-    { name: 'BeatMaster', score: 95, tokens: 1250 },
-    { name: 'SynthQueen', score: 92, tokens: 980 },
-    { name: 'DJ_Pulse', score: 88, tokens: 750 },
-    { name: 'AudioPhreak', score: 85, tokens: 620 },
-    { name: 'Freq_Factory', score: 82, tokens: 540 },
-  ]);
+  const [track, setTrack] = useState<Track | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [transparent, setTransparent] = useState(true);
+
+  // Check URL params for options
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('bg') === 'dark') setTransparent(false);
+  }, []);
+
+  /* ---- Fetch current track from settings ---- */
+  const fetchCurrentTrack = async () => {
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('current_track_id')
+      .limit(1)
+      .single();
+
+    if (settings?.current_track_id) {
+      const { data: trackData } = await supabase
+        .from('tracks')
+        .select('*')
+        .eq('id', settings.current_track_id)
+        .single();
+
+      if (trackData) {
+        // Animate transition
+        setVisible(false);
+        setTimeout(() => {
+          setTrack(trackData);
+          setVisible(true);
+        }, 400);
+        return;
+      }
+    }
+
+    // No current track — try latest approved
+    const { data: latest } = await supabase
+      .from('tracks')
+      .select('*')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (latest) {
+      setVisible(false);
+      setTimeout(() => {
+        setTrack(latest);
+        setVisible(true);
+      }, 400);
+    }
+  };
 
   useEffect(() => {
-    // Fetch initial data
-    const fetchData = async () => {
-      const { data: tracks } = await supabase
-        .from('submissions')
-        .select('*')
-        .eq('status', 'approved')
-        .order('submitted_at', { ascending: true })
-        .limit(10);
+    fetchCurrentTrack();
 
-      if (tracks && tracks.length > 0) {
-        setNowPlaying(tracks[0]);
-        setQueue(tracks.slice(1));
-      }
-    };
+    // Subscribe to settings changes
+    const settingsChannel = supabase
+      .channel('overlay_settings')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'settings' }, () => {
+        fetchCurrentTrack();
+      })
+      .subscribe();
 
-    fetchData();
-
-    // Subscribe to real-time predictions
-    const subscription = supabase
-      .channel('live_predictions')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'predictions' }, (payload) => {
-        const newPrediction: Prediction = {
-          id: payload.new.id,
-          user_name: 'Anonymous',
-          prediction_value: payload.new.prediction_value?.score || 7,
-          created_at: payload.new.created_at,
-        };
-        setPredictions(prev => [newPrediction, ...prev].slice(0, 10));
+    // Also subscribe to tracks changes (in case track data updates)
+    const tracksChannel = supabase
+      .channel('overlay_tracks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tracks' }, () => {
+        fetchCurrentTrack();
       })
       .subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      supabase.removeChannel(settingsChannel);
+      supabase.removeChannel(tracksChannel);
     };
   }, []);
 
   return (
-    <div 
-      className="min-h-screen p-6"
-      style={{ 
-        background: 'transparent', // Transparent for OBS
+    <div
+      className="w-screen h-screen overflow-hidden relative"
+      style={{
+        background: transparent ? 'transparent' : '#000',
         fontFamily: 'Rajdhani, Inter, sans-serif',
       }}
     >
-      {/* Main Layout - positioned for overlay */}
-      <div className="max-w-4xl mx-auto space-y-4">
-        {/* Now Playing - Bottom of screen */}
-        <div className="fixed bottom-6 left-6 right-6 max-w-2xl">
-          <NowPlayingCard track={nowPlaying} />
-        </div>
+      {/* Now Playing card — bottom center */}
+      <AnimatePresence mode="wait">
+        {visible && track && (
+          <motion.div
+            key={track.id}
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.95 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className="fixed bottom-8 left-8 right-8 max-w-xl mx-auto"
+          >
+            <div
+              className="rounded-2xl p-5 backdrop-blur-md"
+              style={{
+                background: 'linear-gradient(135deg, rgba(17,17,17,0.95) 0%, rgba(0,0,0,0.95) 100%)',
+                border: '2px solid #ff6d00',
+                boxShadow: '0 0 40px rgba(255,109,0,0.3), 0 20px 60px rgba(0,0,0,0.8)',
+              }}
+            >
+              <div className="flex items-center gap-4">
+                {/* Cover / Logo */}
+                <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0"
+                  style={{ border: '1px solid #333' }}>
+                  {track.cover_url ? (
+                    <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-[#111] flex items-center justify-center">
+                      <img src="/assets/frequency-crown-actual.png" alt="FF" className="w-10 h-10 object-contain" />
+                    </div>
+                  )}
+                </div>
 
-        {/* Side panels */}
-        <div className="fixed top-6 right-6 w-64 space-y-4">
-          <QueueCard tracks={queue} />
-          <LivePredictionsCard predictions={predictions} />
-        </div>
+                {/* Track info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-gray-400 text-xs tracking-widest uppercase">Now Playing</span>
+                  </div>
+                  <h2 className="text-white text-xl font-bold tracking-wide truncate">{track.artist}</h2>
+                  <p className="text-gray-400 text-sm truncate">
+                    {track.title}
+                    {track.genre ? ` — ${track.genre}` : ''}
+                  </p>
+                </div>
 
-        <div className="fixed top-6 left-6 w-64">
-          <LeaderboardCard leaders={leaders} />
-        </div>
-      </div>
+                {/* Rating badge */}
+                {track.average_rating && (
+                  <div className="flex items-center gap-1 shrink-0 px-3 py-1.5 rounded-full"
+                    style={{ background: 'rgba(255,109,0,0.15)' }}>
+                    <Star className="w-4 h-4 text-[#ff6d00]" fill="#ff6d00" />
+                    <span className="text-white text-sm font-bold">{track.average_rating.toFixed(1)}</span>
+                  </div>
+                )}
+              </div>
 
-      {/* Frequency Factory Watermark */}
-      <div className="fixed bottom-2 right-2 text-xs text-gray-600">
-        Frequency Factory © 2026
+              {/* Gradient bar */}
+              <div className="h-1 mt-4 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full"
+                  style={{
+                    background: 'linear-gradient(90deg, #ff6d00 0%, #ff8f33 30%, #8B00FF 70%, #1E90FF 100%)',
+                  }}
+                  animate={{ x: ['-100%', '0%'] }}
+                  transition={{ duration: 2, ease: 'easeOut' }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* FF watermark — top right */}
+      <div className="fixed top-4 right-4 flex items-center gap-2 opacity-60">
+        <img src="/assets/frequency-crown-actual.png" alt="" className="w-6 h-6 object-contain" />
+        <span className="text-white text-xs tracking-widest font-bold"
+          style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+          FREQUENCY FACTORY
+        </span>
       </div>
     </div>
   );
