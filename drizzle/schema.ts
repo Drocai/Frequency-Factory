@@ -33,6 +33,11 @@ export const users = mysqlTable("users", {
   /** Accurate predictions count */
   accuratePredictions: int("accuratePredictions").default(0),
   
+  /** Whether user is a Founding Artist (first 100 signups) */
+  isFounder: int("isFounder").default(0),
+  /** Founder slot number (1-100) */
+  founderSlot: int("founderSlot"),
+
   /** Last date user claimed daily bonus (YYYY-MM-DD format) */
   lastDailyBonusDate: varchar("lastDailyBonusDate", { length: 10 }),
   /** Current login streak (consecutive days) */
@@ -104,10 +109,11 @@ export const submissions = mysqlTable("submissions", {
   likes: int("likes").default(0),
   commentsCount: int("commentsCount").default(0),
   
-  // Factory metrics (from predictions)
+  // Factory metrics (from predictions - Pro Engine)
   avgHookStrength: int("avgHookStrength").default(0),
   avgOriginality: int("avgOriginality").default(0),
   avgProductionQuality: int("avgProductionQuality").default(0),
+  avgVibe: int("avgVibe").default(0),
   totalCertifications: int("totalCertifications").default(0),
   
   submittedAt: timestamp("submittedAt").defaultNow().notNull(),
@@ -127,11 +133,15 @@ export const predictions = mysqlTable("predictions", {
   hookStrength: int("hookStrength").notNull(),
   originality: int("originality").notNull(),
   productionQuality: int("productionQuality").notNull(),
+  /** Vibe metric: overall feel, energy & replay value (0-100) */
+  vibe: int("vibe").default(50).notNull(),
   overallScore: int("overallScore").notNull(),
   /** Whether this prediction was accurate (determined later) */
   wasAccurate: int("wasAccurate").default(0),
   /** Tokens awarded for this prediction */
   tokensAwarded: int("tokensAwarded").default(0),
+  /** Whether user completed the 17-second engagement protocol */
+  engagementBonusAwarded: int("engagementBonusAwarded").default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

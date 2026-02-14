@@ -3,14 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { supabase, type Track, GENRES, getAnonUserId } from '@/lib/supabase';
 import {
-  Play, Pause, Star, Music, Filter, ArrowUp,
+  Play, Pause, Music, Filter, ArrowUp, Target, Sparkles, Zap, Music2,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
-/*  StarRating                                                         */
+/*  ProRatingBadge — replaces 5-star with Factory Metrics mini-view    */
 /* ------------------------------------------------------------------ */
 
-function StarRating({
+function ProRatingBadge({
   value,
   count,
   trackId,
@@ -21,45 +21,111 @@ function StarRating({
   trackId: string;
   onRated: () => void;
 }) {
-  const [hover, setHover] = useState(0);
-  const [userRating, setUserRating] = useState(0);
+  const [showQuickRate, setShowQuickRate] = useState(false);
+  const [metrics, setMetrics] = useState({ hook: 50, production: 50, originality: 50, vibe: 50 });
   const [saving, setSaving] = useState(false);
 
-  const rate = async (stars: number) => {
+  const overall = Math.round((metrics.hook + metrics.production + metrics.originality + metrics.vibe) / 4);
+
+  const getTierColor = (score: number) => {
+    if (score >= 75) return '#FFD700';
+    if (score >= 60) return '#C0C0C0';
+    if (score >= 40) return '#CD7F32';
+    return '#666';
+  };
+
+  const rate = async () => {
     if (saving) return;
     setSaving(true);
     const userId = getAnonUserId();
+    // Save as composite rating (overall score mapped to 1-5 for backwards compat)
+    const mappedRating = Math.max(1, Math.min(5, Math.round(overall / 20)));
     const { error } = await supabase.from('ratings').upsert(
-      { track_id: trackId, user_id: userId, rating: stars },
+      { track_id: trackId, user_id: userId, rating: mappedRating },
       { onConflict: 'track_id,user_id' },
     );
     setSaving(false);
     if (!error) {
-      setUserRating(stars);
+      setShowQuickRate(false);
       onRated();
     }
   };
 
+  const tierColor = getTierColor(value ? value * 20 : overall);
+
   return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <button
-          key={s}
-          onMouseEnter={() => setHover(s)}
-          onMouseLeave={() => setHover(0)}
-          onClick={() => rate(s)}
-          className="transition"
+    <div className="relative">
+      {/* Score badge */}
+      <button
+        onClick={() => setShowQuickRate(!showQuickRate)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition hover:bg-[#222]"
+        style={{ border: '1px solid #333' }}
+      >
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+          style={{
+            background: `${tierColor}20`,
+            color: tierColor,
+            border: `2px solid ${tierColor}`,
+          }}
         >
-          <Star
-            className="w-4 h-4"
-            fill={(hover || userRating || Math.round(value ?? 0)) >= s ? '#ff6d00' : 'transparent'}
-            stroke={(hover || userRating || Math.round(value ?? 0)) >= s ? '#ff6d00' : '#555'}
-          />
-        </button>
-      ))}
-      <span className="text-gray-500 text-xs ml-1">
-        {value ? value.toFixed(1) : '—'} ({count})
-      </span>
+          {value ? Math.round(value * 20) : '—'}
+        </div>
+        <div className="text-left">
+          <div className="text-white text-xs font-semibold">Factory Score</div>
+          <div className="text-gray-500 text-[10px]">{count} ratings</div>
+        </div>
+      </button>
+
+      {/* Quick-rate dropdown */}
+      <AnimatePresence>
+        {showQuickRate && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            className="absolute top-full left-0 mt-2 w-64 rounded-xl p-3 z-20 space-y-2"
+            style={{ background: '#1A1A1A', border: '1px solid #333', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}
+          >
+            <div className="text-xs text-gray-400 font-medium mb-2">Quick Rate</div>
+
+            {[
+              { key: 'hook', label: 'Hook', icon: Target, color: '#FF4500' },
+              { key: 'production', label: 'Production', icon: Sparkles, color: '#1E90FF' },
+              { key: 'originality', label: 'Originality', icon: Zap, color: '#8B00FF' },
+              { key: 'vibe', label: 'Vibe', icon: Music2, color: '#FFD700' },
+            ].map(({ key, label, icon: Icon, color }) => (
+              <div key={key} className="flex items-center gap-2">
+                <Icon className="w-3 h-3 shrink-0" style={{ color }} />
+                <span className="text-gray-400 text-[10px] w-16">{label}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={metrics[key as keyof typeof metrics]}
+                  onChange={(e) => setMetrics(prev => ({ ...prev, [key]: parseInt(e.target.value) }))}
+                  className="flex-1 h-1 rounded-full cursor-pointer appearance-none"
+                  style={{
+                    background: `linear-gradient(to right, ${color} 0%, ${color} ${metrics[key as keyof typeof metrics]}%, #333 ${metrics[key as keyof typeof metrics]}%, #333 100%)`,
+                  }}
+                />
+                <span className="text-white text-[10px] font-bold w-6 text-right tabular-nums">
+                  {metrics[key as keyof typeof metrics]}
+                </span>
+              </div>
+            ))}
+
+            <button
+              onClick={rate}
+              disabled={saving}
+              className="w-full py-2 rounded-lg text-xs font-bold text-white mt-2"
+              style={{ background: 'linear-gradient(135deg, #FF4500, #FF6B35)' }}
+            >
+              {saving ? 'SAVING...' : `LOCK IN ${overall}`}
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -148,7 +214,7 @@ function TrackCard({ track, onRated }: { track: Track; onRated: () => void }) {
 
         <AudioPlayer url={track.audio_url} />
 
-        <StarRating
+        <ProRatingBadge
           value={track.average_rating}
           count={track.rating_count}
           trackId={track.id}
@@ -292,6 +358,27 @@ export default function Listen() {
           </button>
         </div>
       )}
+
+      {/* Quick-rate slider styles */}
+      <style>{`
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 10px;
+          height: 10px;
+          background: white;
+          border-radius: 50%;
+          cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 8px;
+          height: 8px;
+          background: white;
+          border-radius: 50%;
+          cursor: pointer;
+          border: none;
+        }
+      `}</style>
     </div>
   );
 }

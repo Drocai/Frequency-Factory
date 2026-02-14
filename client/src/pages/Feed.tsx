@@ -10,6 +10,8 @@ import PredictionModal from '@/components/PredictionModal';
 import CommentsModal from '@/components/CommentsModal';
 import ShareModal from '@/components/ShareModal';
 import DailyBonusModal from '@/components/DailyBonusModal';
+import MissionGenerator from '@/components/MissionGenerator';
+import FoundingSlotsCounter from '@/components/FoundingSlotsCounter';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
@@ -341,6 +343,8 @@ export default function Feed() {
       hookStrength: scores.hookStrength,
       originality: scores.originality,
       productionQuality: scores.productionQuality,
+      vibe: scores.vibe ?? 50,
+      engagementBonus: scores.engagementBonus ?? false,
     });
 
     setUserPredictions(prev => new Set(prev).add(trackId));
@@ -397,6 +401,13 @@ export default function Feed() {
           )}
         </div>
       </header>
+
+      {/* Founding Artist CTA */}
+      {isAuthenticated && (
+        <div className="px-4 pt-2 pb-4">
+          <FoundingSlotsCounter remaining={42} total={100} compact />
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 pt-2">
@@ -489,6 +500,9 @@ export default function Feed() {
 
       {/* QUENCY AI Chat */}
       <QuencyChat />
+
+      {/* Mission Generator — ROI-driven engagement CTA */}
+      <MissionGenerator isAuthenticated={isAuthenticated} idleTimeMs={30000} />
     </div>
   );
 }
