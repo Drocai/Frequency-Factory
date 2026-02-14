@@ -1,13 +1,14 @@
 import { eq, desc, sql, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
+import {
+  InsertUser, users,
   tokenTransactions, InsertTokenTransaction,
   submissions, InsertSubmission,
   predictions, InsertPrediction,
   comments, InsertComment,
   likes,
-  notifications, InsertNotification
+  notifications, InsertNotification,
+  claudeLearnings, InsertClaudeLearning
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -946,4 +947,45 @@ export async function getTopCommenters(timeFilter: 'all' | 'month' | 'week' = 'a
   );
 
   return enrichedResults;
+}
+
+// ============================================
+// CLAUDE LEARNINGS QUERIES
+// ============================================
+
+export async function addLearning(learning: Omit<InsertClaudeLearning, 'id' | 'createdAt'>) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [result] = await db.insert(claudeLearnings).values(learning);
+  return { id: Number(result.insertId) };
+}
+
+export async function getLearnings(category?: string, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  if (category) {
+    return db.select()
+      .from(claudeLearnings)
+      .where(eq(claudeLearnings.category, category))
+      .orderBy(desc(claudeLearnings.createdAt))
+      .limit(limit);
+  }
+
+  return db.select()
+    .from(claudeLearnings)
+    .orderBy(desc(claudeLearnings.createdAt))
+    .limit(limit);
+}
+
+export async function resolveLearning(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  await db.update(claudeLearnings)
+    .set({ resolved: 1 })
+    .where(eq(claudeLearnings.id, id));
+
+  return { success: true };
 }

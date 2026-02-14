@@ -207,3 +207,28 @@ export const notifications = mysqlTable("notifications", {
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
+
+/**
+ * Claude learnings table - persistent knowledge base for errors and lessons learned
+ */
+export const claudeLearnings = mysqlTable("claudeLearnings", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Category of the learning (e.g. git, deployment, database, api) */
+  category: varchar("category", { length: 64 }).notNull(),
+  /** Short title summarizing the lesson */
+  title: varchar("title", { length: 255 }).notNull(),
+  /** The error or problem encountered */
+  problem: text("problem").notNull(),
+  /** The solution or workaround discovered */
+  solution: text("solution").notNull(),
+  /** How to prevent this in the future */
+  prevention: text("prevention"),
+  /** Severity: info, warning, error, critical */
+  severity: mysqlEnum("severity", ["info", "warning", "error", "critical"]).default("info").notNull(),
+  /** Whether this learning has been resolved/applied */
+  resolved: int("resolved").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ClaudeLearning = typeof claudeLearnings.$inferSelect;
+export type InsertClaudeLearning = typeof claudeLearnings.$inferInsert;
