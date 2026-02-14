@@ -136,6 +136,21 @@ export const appRouter = router({
   }),
 
   // ============================================
+  // FOUNDER ROUTER
+  // ============================================
+  founder: router({
+    // Check and assign founder status
+    checkAndAssign: protectedProcedure.mutation(async ({ ctx }) => {
+      return db.checkAndAssignFounder(ctx.user.id);
+    }),
+
+    // Get remaining founder slots (public)
+    getSlots: publicProcedure.query(async () => {
+      return db.getFounderCount();
+    }),
+  }),
+
+  // ============================================
   // SUBMISSIONS ROUTER
   // ============================================
   submissions: router({
@@ -237,6 +252,8 @@ export const appRouter = router({
         hookStrength: z.number().min(0).max(100),
         originality: z.number().min(0).max(100),
         productionQuality: z.number().min(0).max(100),
+        vibe: z.number().min(0).max(100).optional(),
+        engagementBonus: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Check if user already predicted this track
@@ -245,8 +262,9 @@ export const appRouter = router({
           return { success: false, error: 'already_predicted' };
         }
 
+        const vibeScore = input.vibe ?? 50;
         const overallScore = Math.round(
-          (input.hookStrength + input.originality + input.productionQuality) / 3
+          (input.hookStrength + input.originality + input.productionQuality + vibeScore) / 4
         );
 
         const result = await db.createPrediction({
@@ -255,16 +273,27 @@ export const appRouter = router({
           hookStrength: input.hookStrength,
           originality: input.originality,
           productionQuality: input.productionQuality,
+          vibe: vibeScore,
           overallScore,
+          engagementBonusAwarded: input.engagementBonus ? 1 : 0,
         });
 
         if (result) {
-          // Award 5 FT for prediction
+          // Base award: 5 FT for prediction
+          let totalAward = 5;
+          let description = 'Certified a track';
+
+          // Engagement bonus: +2 FT for completing 17-second protocol
+          if (input.engagementBonus) {
+            totalAward += 2;
+            description = 'Certified a track + 17s engagement bonus';
+          }
+
           await db.awardTokens(
             ctx.user.id,
-            5,
+            totalAward,
             'prediction',
-            'Certified a track',
+            description,
             input.submissionId
           );
         }

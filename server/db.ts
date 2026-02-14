@@ -128,6 +128,52 @@ export async function updateUserTokenBalance(userId: number, newBalance: number)
 }
 
 // ============================================
+// FOUNDER AUTO-ASSIGNMENT
+// ============================================
+
+const MAX_FOUNDER_SLOTS = 100;
+
+export async function checkAndAssignFounder(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const user = await getUserById(userId);
+  if (!user || user.isFounder === 1) return { alreadyFounder: true, slot: user?.founderSlot };
+
+  // Count current founders
+  const [result] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(users)
+    .where(eq(users.isFounder, 1));
+
+  const currentFounders = result?.count || 0;
+
+  if (currentFounders >= MAX_FOUNDER_SLOTS) {
+    return { assigned: false, slotsRemaining: 0 };
+  }
+
+  const slotNumber = currentFounders + 1;
+
+  // Assign founder status
+  await db.update(users)
+    .set({ isFounder: 1, founderSlot: slotNumber })
+    .where(eq(users.id, userId));
+
+  return { assigned: true, slot: slotNumber, slotsRemaining: MAX_FOUNDER_SLOTS - slotNumber };
+}
+
+export async function getFounderCount() {
+  const db = await getDb();
+  if (!db) return { count: 0, remaining: MAX_FOUNDER_SLOTS };
+
+  const [result] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(users)
+    .where(eq(users.isFounder, 1));
+
+  const count = result?.count || 0;
+  return { count, remaining: MAX_FOUNDER_SLOTS - count };
+}
+
+// ============================================
 // TOKEN QUERIES
 // ============================================
 
@@ -333,7 +379,7 @@ export async function createPrediction(prediction: InsertPrediction) {
 
   const result = await db.insert(predictions).values(prediction);
 
-  // Update submission metrics
+  // Update submission metrics (Pro Engine: 4 dimensions)
   const allPredictions = await db.select()
     .from(predictions)
     .where(eq(predictions.submissionId, prediction.submissionId));
@@ -341,12 +387,14 @@ export async function createPrediction(prediction: InsertPrediction) {
   const avgHook = Math.round(allPredictions.reduce((sum, p) => sum + p.hookStrength, 0) / allPredictions.length);
   const avgOriginality = Math.round(allPredictions.reduce((sum, p) => sum + p.originality, 0) / allPredictions.length);
   const avgProduction = Math.round(allPredictions.reduce((sum, p) => sum + p.productionQuality, 0) / allPredictions.length);
+  const avgVibe = Math.round(allPredictions.reduce((sum, p) => sum + (p.vibe || 50), 0) / allPredictions.length);
 
   await db.update(submissions)
     .set({
       avgHookStrength: avgHook,
       avgOriginality,
       avgProductionQuality: avgProduction,
+      avgVibe,
       totalCertifications: allPredictions.length,
     })
     .where(eq(submissions.id, prediction.submissionId));

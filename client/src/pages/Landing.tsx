@@ -4,8 +4,10 @@ import { useLocation } from 'wouter';
 import { supabase, GENRES } from '@/lib/supabase';
 import { toast } from 'sonner';
 import {
-  Upload, Music, Image, X, Plus, ChevronDown, Loader2, CheckCircle,
+  Upload, Music, Image, X, Plus, ChevronDown, Loader2, CheckCircle, Zap, Shield, ArrowRight,
 } from 'lucide-react';
+import FoundingSlotsCounter from '@/components/FoundingSlotsCounter';
+import SocialProofMarquee from '@/components/SocialProofMarquee';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -42,6 +44,67 @@ const emptyDraft = (): TrackDraft => ({
   progress: 0,
   done: false,
 });
+
+/* ------------------------------------------------------------------ */
+/*  Factory Progress Bar (VU meter style)                              */
+/* ------------------------------------------------------------------ */
+
+function FactoryProgressBar({ drafts }: { drafts: TrackDraft[] }) {
+  // Calculate overall submission completeness
+  const calculateCompleteness = () => {
+    if (drafts.length === 0) return 0;
+    const totalFields = drafts.length * 5; // title, artist, genre, audio, socials
+    let filled = 0;
+    drafts.forEach(d => {
+      if (d.title.trim()) filled++;
+      if (d.artist.trim()) filled++;
+      if (d.genre) filled++;
+      if (d.audioFile) filled++;
+      if (d.socials.trim()) filled++;
+      if (d.done) filled = 5; // Full credit for completed
+    });
+    return Math.round((filled / totalFields) * 100);
+  };
+
+  const progress = calculateCompleteness();
+  const segmentCount = 30;
+  const activeSegments = Math.round((progress / 100) * segmentCount);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <span className="text-gray-500 text-xs tracking-wider uppercase">Factory Progress</span>
+        <span className="text-orange-400 text-sm font-bold tabular-nums">{progress}%</span>
+      </div>
+      <div className="flex gap-[2px] h-6 items-end">
+        {Array.from({ length: segmentCount }).map((_, i) => {
+          const isActive = i < activeSegments;
+          const intensity = i / segmentCount;
+          const hue = 20 + intensity * 100; // Orange to green
+
+          return (
+            <motion.div
+              key={i}
+              className="flex-1 rounded-sm"
+              initial={{ height: '20%' }}
+              animate={{
+                height: isActive ? `${50 + intensity * 50}%` : '20%',
+                opacity: isActive ? 0.7 + intensity * 0.3 : 0.15,
+              }}
+              transition={{ duration: 0.3, delay: i * 0.02 }}
+              style={{
+                background: isActive
+                  ? `hsl(${hue}, 80%, 50%)`
+                  : '#2A2A2A',
+                boxShadow: isActive ? `0 0 6px hsla(${hue}, 80%, 50%, 0.3)` : 'none',
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  DropZone                                                           */
@@ -279,6 +342,56 @@ function TrackForm({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Certified Badge Preview                                            */
+/* ------------------------------------------------------------------ */
+
+function CertifiedBadgePreview() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl p-6 text-center"
+      style={{
+        background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)',
+        border: '1px solid #333',
+      }}
+    >
+      <div className="flex items-center justify-center gap-2 mb-3">
+        <Shield className="w-5 h-5 text-orange-400" />
+        <h3 className="text-white font-bold text-sm" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+          WHAT YOU'RE COMPETING FOR
+        </h3>
+      </div>
+
+      {/* Badge preview */}
+      <div className="inline-flex flex-col items-center gap-3 p-6 rounded-xl" style={{ background: '#111', border: '1px solid #FF450040' }}>
+        <div className="relative">
+          <div
+            className="w-24 h-24 rounded-full flex items-center justify-center"
+            style={{
+              background: 'linear-gradient(135deg, #FF4500, #FFD700)',
+              boxShadow: '0 0 30px rgba(255,69,0,0.4)',
+            }}
+          >
+            <img src="/assets/frequency-crown-actual.png" alt="FF" className="w-14 h-14 object-contain" />
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+            <CheckCircle className="w-5 h-5 text-white" />
+          </div>
+        </div>
+        <div>
+          <p className="text-white font-bold text-sm" style={{ fontFamily: 'Rajdhani, sans-serif' }}>CERTIFIED BY</p>
+          <p className="text-orange-400 font-bold text-lg tracking-wider" style={{ fontFamily: 'Rajdhani, sans-serif' }}>FREQUENCY FACTORY</p>
+        </div>
+        <p className="text-gray-500 text-xs max-w-[200px]">
+          Awarded to tracks that achieve Gold tier or higher through community certifications
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Landing (main)                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -390,23 +503,42 @@ export default function Landing() {
         <div className="flex items-center gap-4">
           <button onClick={() => setLocation('/listen')}
             className="text-gray-400 hover:text-white text-sm transition">Listen</button>
-          <button onClick={() => setLocation('/admin')}
-            className="text-gray-400 hover:text-white text-sm transition">Admin</button>
+          <button onClick={() => setLocation('/feed')}
+            className="px-4 py-2 rounded-lg text-sm font-bold text-black transition flex items-center gap-1"
+            style={{ background: '#ff6d00' }}>
+            <Zap className="w-3 h-3" />
+            Enter Factory
+          </button>
         </div>
       </nav>
 
+      {/* Social Proof Marquee */}
+      <SocialProofMarquee />
+
       {/* Hero */}
-      <section className="relative flex flex-col items-center justify-center px-6 pt-16 pb-8 text-center"
+      <section className="relative flex flex-col items-center justify-center px-6 pt-16 pb-8 text-center overflow-hidden"
         style={{ backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(255,109,0,0.08) 0%, transparent 60%)' }}>
+
+        {/* Animated background grid */}
+        <div className="absolute inset-0 opacity-5" style={{
+          backgroundImage: 'linear-gradient(rgba(255,109,0,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,109,0,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }} />
+
         <motion.img
           src="/assets/frequency-crown-actual.png"
           alt="Frequency Factory"
-          className="w-48 h-48 mb-6 object-contain"
+          className="w-48 h-48 mb-6 object-contain relative z-10"
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.6 }}
         />
-        <h1 className="text-5xl md:text-6xl font-bold mb-3 tracking-wider"
+
+        <motion.h1
+          className="text-5xl md:text-6xl font-bold mb-3 tracking-wider relative z-10"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
           style={{
             background: 'linear-gradient(180deg, #fff 0%, #aaa 100%)',
             WebkitBackgroundClip: 'text',
@@ -415,18 +547,78 @@ export default function Landing() {
             letterSpacing: '0.08em',
           }}>
           FREQUENCY FACTORY
-        </h1>
-        <p className="text-gray-400 text-lg max-w-lg mb-2">Where raw tracks get built into hits</p>
-        <div className="h-1 w-24 mt-2 rounded-full" style={{ background: 'linear-gradient(90deg, #ff6d00, #ff8f33)' }} />
+        </motion.h1>
+
+        <motion.p
+          className="text-gray-400 text-lg max-w-lg mb-2 relative z-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+        >
+          Where raw tracks get built into hits
+        </motion.p>
+
+        <motion.div
+          className="h-1 w-24 mt-2 rounded-full relative z-10"
+          style={{ background: 'linear-gradient(90deg, #ff6d00, #ff8f33)' }}
+          initial={{ width: 0 }}
+          animate={{ width: 96 }}
+          transition={{ delay: 0.6, duration: 0.8 }}
+        />
+
+        {/* Quick CTAs */}
+        <motion.div
+          className="flex gap-3 mt-6 relative z-10"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+        >
+          <button
+            onClick={() => setLocation('/feed')}
+            className="px-5 py-2.5 rounded-lg text-sm font-bold text-white transition flex items-center gap-2 hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #FF4500, #FF6B35)', boxShadow: '0 0 20px rgba(255,69,0,0.3)' }}
+          >
+            <Zap className="w-4 h-4" />
+            Certify Tracks
+          </button>
+          <button
+            onClick={() => document.getElementById('submit-section')?.scrollIntoView({ behavior: 'smooth' })}
+            className="px-5 py-2.5 rounded-lg text-sm font-bold text-white transition flex items-center gap-2 border border-gray-700 hover:border-orange-500/50"
+            style={{ background: '#1A1A1A' }}
+          >
+            <Upload className="w-4 h-4" />
+            Drop Your Track
+          </button>
+        </motion.div>
+      </section>
+
+      {/* Founding Artist Section */}
+      <section className="max-w-3xl mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <FoundingSlotsCounter remaining={42} total={100} />
+          <CertifiedBadgePreview />
+        </div>
       </section>
 
       {/* Submission section */}
-      <section className="max-w-3xl mx-auto px-4 pb-24">
-        <h2 className="text-2xl text-white font-bold mb-6 flex items-center gap-2"
-          style={{ fontFamily: 'Rajdhani, sans-serif' }}>
-          <Music className="w-6 h-6 text-[#ff6d00]" />
-          SUBMIT YOUR TRACK
-        </h2>
+      <section id="submit-section" className="max-w-3xl mx-auto px-4 pb-24">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl text-white font-bold flex items-center gap-2"
+            style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+            <Music className="w-6 h-6 text-[#ff6d00]" />
+            DROP YOUR TRACK
+          </h2>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 text-xs">Earn</span>
+            <span className="text-orange-400 text-xs font-bold">+1 FT</span>
+            <span className="text-gray-500 text-xs">per submission</span>
+          </div>
+        </div>
+
+        {/* Factory Progress Bar */}
+        <div className="mb-6">
+          <FactoryProgressBar drafts={drafts} />
+        </div>
 
         <div className="space-y-6">
           <AnimatePresence mode="popLayout">
@@ -471,11 +663,12 @@ export default function Landing() {
                   Submit More
                 </button>
                 <button
-                  onClick={() => setLocation('/listen')}
-                  className="px-6 py-3 rounded-lg text-white font-bold transition"
+                  onClick={() => setLocation('/feed')}
+                  className="px-6 py-3 rounded-lg text-white font-bold transition flex items-center gap-2"
                   style={{ background: '#ff6d00' }}
                 >
-                  Browse Approved Tracks
+                  Enter the Factory
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </motion.div>
