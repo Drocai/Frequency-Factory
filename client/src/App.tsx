@@ -12,6 +12,7 @@ import AdminQueue from "./pages/AdminQueue";
 import StreamAdmin from "./pages/StreamAdmin";
 import Listen from "./pages/Listen";
 import LiveOverlay from "./pages/LiveOverlay";
+import PaymentSuccess from "./pages/PaymentSuccess";
 
 // Legacy / supplemental routes
 import Feed from "./pages/Feed";
@@ -34,6 +35,7 @@ function Router() {
       <Route path={"/admin/stream"} component={StreamAdmin} />
       <Route path={"/listen"} component={Listen} />
       <Route path={"/overlay"} component={LiveOverlay} />
+      <Route path={"/payment-success"} component={PaymentSuccess} />
 
       {/* Legacy / supplemental routes */}
       <Route path={"/avatar"} component={AvatarSelection} />

@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
+import Stripe from "stripe";
 
 export const appRouter = router({
   system: systemRouter,
@@ -528,6 +529,95 @@ export const appRouter = router({
           throw new Error('Unauthorized: Admin access required');
         }
         return db.getRecentActivity(input?.limit);
+      }),
+  }),
+
+  // ============================================
+  // STRIPE ROUTER — $25 Submission Payment Gate
+  // ============================================
+  stripe: router({
+    createCheckoutSession: publicProcedure
+      .input(z.object({
+        trackTitle: z.string().min(1),
+        artistName: z.string().min(1),
+        // Pass the already-uploaded URLs so we can embed them in metadata
+        audioUrl: z.string().url(),
+        coverUrl: z.string().nullable(),
+        genre: z.string().nullable(),
+        socials: z.string().nullable(),
+        notes: z.string().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const secretKey = process.env.STRIPE_SECRET_KEY;
+        if (!secretKey) {
+          throw new Error('Stripe is not configured. Set STRIPE_SECRET_KEY in .env');
+        }
+
+        const stripe = new Stripe(secretKey);
+        const feeCents = parseInt(process.env.SUBMISSION_FEE_CENTS || '2500', 10);
+
+        const origin = `${ctx.req.protocol}://${ctx.req.get('host')}`;
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              price_data: {
+                currency: 'usd',
+                product_data: {
+                  name: `Track Submission: "${input.trackTitle}"`,
+                  description: `By ${input.artistName} — Frequency Factory submission fee`,
+                },
+                unit_amount: feeCents,
+              },
+              quantity: 1,
+            },
+          ],
+          mode: 'payment',
+          success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}/?payment=cancelled`,
+          metadata: {
+            trackTitle: input.trackTitle,
+            artistName: input.artistName,
+            audioUrl: input.audioUrl,
+            coverUrl: input.coverUrl || '',
+            genre: input.genre || '',
+            socials: input.socials || '',
+            notes: input.notes || '',
+          },
+        });
+
+        return { sessionId: session.id, url: session.url };
+      }),
+
+    // Verify a completed session and return the metadata
+    verifySession: publicProcedure
+      .input(z.object({ sessionId: z.string() }))
+      .query(async ({ input }) => {
+        const secretKey = process.env.STRIPE_SECRET_KEY;
+        if (!secretKey) {
+          throw new Error('Stripe is not configured');
+        }
+
+        const stripe = new Stripe(secretKey);
+        const session = await stripe.checkout.sessions.retrieve(input.sessionId);
+
+        if (session.payment_status !== 'paid') {
+          return { paid: false, metadata: null };
+        }
+
+        return {
+          paid: true,
+          metadata: session.metadata as {
+            trackTitle: string;
+            artistName: string;
+            audioUrl: string;
+            coverUrl: string;
+            genre: string;
+            socials: string;
+            notes: string;
+          },
+        };
       }),
   }),
 });

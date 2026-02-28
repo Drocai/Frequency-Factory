@@ -2,12 +2,14 @@ import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { supabase, GENRES } from '@/lib/supabase';
+import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 import {
-  Upload, Music, Image, X, Plus, ChevronDown, Loader2, CheckCircle, Zap, Shield, ArrowRight,
+  Upload, Music, Image, X, Plus, ChevronDown, Loader2, CheckCircle, Zap, Shield, ArrowRight, CreditCard,
 } from 'lucide-react';
 import FoundingSlotsCounter from '@/components/FoundingSlotsCounter';
 import SocialProofMarquee from '@/components/SocialProofMarquee';
+import NowPlaying from '@/components/NowPlaying';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -399,6 +401,11 @@ export default function Landing() {
   const [, setLocation] = useLocation();
   const [drafts, setDrafts] = useState<TrackDraft[]>([emptyDraft()]);
   const [submitting, setSubmitting] = useState(false);
+  const createCheckout = trpc.stripe.createCheckoutSession.useMutation();
+
+  // Check if user returned from a cancelled Stripe payment
+  const paymentCancelled = typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('payment') === 'cancelled';
 
   const updateDraft = (idx: number, d: TrackDraft) => {
     setDrafts((prev) => prev.map((p, i) => (i === idx ? d : p)));
@@ -412,8 +419,8 @@ export default function Landing() {
     setDrafts((prev) => [...prev, emptyDraft()]);
   };
 
-  /* Upload a single track */
-  const uploadTrack = async (draft: TrackDraft, idx: number): Promise<boolean> => {
+  /* Upload files and redirect to Stripe Checkout for payment */
+  const uploadAndPay = async (draft: TrackDraft, idx: number): Promise<boolean> => {
     if (!draft.audioFile || !draft.title.trim() || !draft.artist.trim()) {
       toast.error(`Track ${idx + 1}: title, artist, and audio file are required`);
       return false;
@@ -422,21 +429,21 @@ export default function Landing() {
     updateDraft(idx, { ...draft, uploading: true, progress: 10 });
 
     try {
-      // 1. Upload audio
-      const audioPath = `${Date.now()}-${draft.audioFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      // 1. Upload audio to Supabase Storage
+      const audioPath = `${draft.artist.trim().replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${draft.audioFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { error: audioErr } = await supabase.storage
         .from('audio')
         .upload(audioPath, draft.audioFile);
       if (audioErr) throw audioErr;
 
-      updateDraft(idx, { ...draft, uploading: true, progress: 50 });
+      updateDraft(idx, { ...draft, uploading: true, progress: 40 });
 
       const { data: audioUrl } = supabase.storage.from('audio').getPublicUrl(audioPath);
 
       // 2. Upload cover (optional)
       let coverPublicUrl: string | null = null;
       if (draft.coverFile) {
-        const coverPath = `${Date.now()}-${draft.coverFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const coverPath = `${draft.artist.trim().replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${draft.coverFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
         const { error: coverErr } = await supabase.storage
           .from('covers')
           .upload(coverPath, draft.coverFile);
@@ -445,23 +452,28 @@ export default function Landing() {
         coverPublicUrl = cu.publicUrl;
       }
 
-      updateDraft(idx, { ...draft, uploading: true, progress: 80 });
+      updateDraft(idx, { ...draft, uploading: true, progress: 70 });
 
-      // 3. Insert track row
-      const { error: insertErr } = await supabase.from('tracks').insert({
-        title: draft.title.trim(),
-        artist: draft.artist.trim(),
-        audio_url: audioUrl.publicUrl,
-        cover_url: coverPublicUrl,
+      // 3. Create Stripe Checkout session (files uploaded, track NOT inserted yet)
+      const result = await createCheckout.mutateAsync({
+        trackTitle: draft.title.trim(),
+        artistName: draft.artist.trim(),
+        audioUrl: audioUrl.publicUrl,
+        coverUrl: coverPublicUrl,
         genre: draft.genre || null,
         socials: draft.socials.trim() || null,
         notes: draft.notes.trim() || null,
-        status: 'pending',
       });
-      if (insertErr) throw insertErr;
 
-      updateDraft(idx, { ...draft, uploading: false, progress: 100, done: true });
-      return true;
+      updateDraft(idx, { ...draft, uploading: true, progress: 90 });
+
+      // 4. Redirect to Stripe Checkout
+      if (result.url) {
+        window.location.href = result.url;
+        return true;
+      }
+
+      throw new Error('Failed to create payment session');
     } catch (err: any) {
       updateDraft(idx, { ...draft, uploading: false, progress: 0 });
       toast.error(`Track ${idx + 1} failed: ${err.message}`);
@@ -471,20 +483,15 @@ export default function Landing() {
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    let successes = 0;
 
+    // Process the first non-done draft (Stripe redirects, so we handle one at a time)
     for (let i = 0; i < drafts.length; i++) {
-      if (drafts[i].done) { successes++; continue; }
-      const ok = await uploadTrack(drafts[i], i);
-      if (ok) successes++;
+      if (drafts[i].done) continue;
+      await uploadAndPay(drafts[i], i);
+      break; // Stripe will redirect — only process one at a time
     }
 
     setSubmitting(false);
-    if (successes === drafts.length) {
-      toast.success(`${successes} track${successes > 1 ? 's' : ''} submitted for review!`);
-    } else if (successes > 0) {
-      toast.info(`${successes}/${drafts.length} tracks submitted. Fix errors and retry.`);
-    }
   };
 
   const allDone = drafts.length > 0 && drafts.every((d) => d.done);
@@ -592,6 +599,11 @@ export default function Landing() {
         </motion.div>
       </section>
 
+      {/* Now Playing — Live Stream Sync */}
+      <section className="max-w-3xl mx-auto px-4 pt-8 pb-4">
+        <NowPlaying />
+      </section>
+
       {/* Founding Artist Section */}
       <section className="max-w-3xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -645,6 +657,22 @@ export default function Landing() {
             </button>
           )}
 
+          {/* Payment cancelled banner */}
+          {paymentCancelled && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl p-4 flex items-center gap-3"
+              style={{ background: '#1a1a1a', border: '1px solid #ff6d0040' }}
+            >
+              <CreditCard className="w-5 h-5 text-orange-400 shrink-0" />
+              <div>
+                <p className="text-white text-sm font-medium">Payment cancelled</p>
+                <p className="text-gray-500 text-xs">No worries — your data is still here. Submit when you're ready.</p>
+              </div>
+            </motion.div>
+          )}
+
           {/* Submit */}
           {allDone ? (
             <motion.div
@@ -673,23 +701,31 @@ export default function Landing() {
               </div>
             </motion.div>
           ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="w-full py-4 rounded-xl text-white font-bold text-lg tracking-wider transition-all disabled:opacity-50"
-              style={{
-                background: 'linear-gradient(135deg, #ff6d00, #ff8f33)',
-                boxShadow: '0 0 30px rgba(255,109,0,0.4)',
-              }}
-            >
-              {submitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" /> Uploading...
-                </span>
-              ) : (
-                `SUBMIT ${drafts.length > 1 ? `${drafts.length} TRACKS` : 'TRACK'}`
-              )}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="w-full py-4 rounded-xl text-white font-bold text-lg tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+                style={{
+                  background: 'linear-gradient(135deg, #ff6d00, #ff8f33)',
+                  boxShadow: '0 0 30px rgba(255,109,0,0.4)',
+                }}
+              >
+                {submitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" /> Uploading & redirecting to payment...
+                  </span>
+                ) : (
+                  <>
+                    <CreditCard className="w-5 h-5" />
+                    PAY $25 & SUBMIT {drafts.length > 1 ? `${drafts.length} TRACKS` : 'TRACK'}
+                  </>
+                )}
+              </button>
+              <p className="text-center text-gray-600 text-xs">
+                Secure payment via Stripe. Your track enters the review queue immediately after payment.
+              </p>
+            </div>
           )}
         </div>
       </section>

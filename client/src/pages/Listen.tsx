@@ -5,6 +5,7 @@ import { supabase, type Track, GENRES, getAnonUserId } from '@/lib/supabase';
 import {
   Play, Pause, Music, Filter, ArrowUp, Target, Sparkles, Zap, Music2,
 } from 'lucide-react';
+import NowPlaying from '@/components/NowPlaying';
 
 /* ------------------------------------------------------------------ */
 /*  ProRatingBadge — replaces 5-star with Factory Metrics mini-view    */
@@ -310,6 +311,11 @@ export default function Listen() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Now Playing */}
+      <div className="px-6 pt-6">
+        <NowPlaying />
+      </div>
 
       {/* Header */}
       <div className="px-6 pt-8 pb-4">
