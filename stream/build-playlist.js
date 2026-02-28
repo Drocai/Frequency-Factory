@@ -6,11 +6,14 @@
  * Queries Supabase for all approved tracks and writes an ffmpeg-compatible
  * playlist file (playlist.m3u8) that can be fed into start-stream.js.
  *
+ * Tries approved_tracks first, falls back to the tracks table (status=approved).
+ * Uses curl as a fallback when the Supabase JS client can't connect.
+ *
  * Usage:  node build-playlist.js
  * Output: stream/playlist.m3u8
  */
 
-const { createClient } = require("@supabase/supabase-js");
+const { execSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -30,37 +33,115 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// ---------------------------------------------------------------------------
+// Fetch helpers
+// ---------------------------------------------------------------------------
+
+async function fetchWithSupabaseJS(table, selectCols, filters, orderCol) {
+  const { createClient } = require("@supabase/supabase-js");
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+  let query = supabase.from(table).select(selectCols);
+  for (const [col, val] of Object.entries(filters)) {
+    query = query.eq(col, val);
+  }
+  if (orderCol) query = query.order(orderCol, { ascending: true });
+
+  return query;
+}
+
+function fetchWithCurl(table, selectCols, filters) {
+  const params = new URLSearchParams({ select: selectCols });
+  for (const [col, val] of Object.entries(filters)) {
+    params.append(col, `eq.${val}`);
+  }
+
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${params.toString()}`;
+  const result = execSync(
+    `curl -s '${url}' -H 'apikey: ${SUPABASE_SERVICE_KEY}' -H 'Authorization: Bearer ${SUPABASE_SERVICE_KEY}' -H 'Accept-Profile: public'`,
+    { encoding: "utf-8" }
+  );
+  return JSON.parse(result);
+}
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function buildPlaylist() {
-  console.log("Fetching approved tracks from Supabase...");
+  let tracks = [];
 
-  const { data: tracks, error } = await supabase
-    .from("approved_tracks")
-    .select("id, artist_name, track_title, file_url")
-    .eq("approved", true)
-    .order("approved_at", { ascending: true });
+  // Strategy 1: Try approved_tracks table via JS client
+  console.log("Trying approved_tracks table via Supabase JS client...");
+  try {
+    const { data, error } = await fetchWithSupabaseJS(
+      "approved_tracks",
+      "id, artist_name, track_title, file_url",
+      { approved: true },
+      "approved_at"
+    );
+    if (!error && data && data.length > 0) {
+      tracks = data;
+      console.log(`Found ${tracks.length} track(s) in approved_tracks.`);
+    } else {
+      throw new Error(error ? error.message : "No tracks found");
+    }
+  } catch (err) {
+    console.log(`approved_tracks via JS failed: ${err.message}`);
 
-  if (error) {
-    console.error("Supabase query failed:", error.message);
-    process.exit(1);
+    // Strategy 2: Try approved_tracks via curl
+    console.log("Trying approved_tracks via curl...");
+    try {
+      const data = fetchWithCurl(
+        "approved_tracks",
+        "id,artist_name,track_title,file_url",
+        { approved: true }
+      );
+      if (Array.isArray(data) && data.length > 0) {
+        tracks = data;
+        console.log(`Found ${tracks.length} track(s) in approved_tracks via curl.`);
+      } else {
+        throw new Error("No tracks or table not in schema cache");
+      }
+    } catch (err2) {
+      console.log(`approved_tracks via curl failed: ${err2.message}`);
+
+      // Strategy 3: Fall back to tracks table via curl
+      console.log("Falling back to tracks table via curl...");
+      const data = fetchWithCurl(
+        "tracks",
+        "id,artist as artist_name,title as track_title,audio_url as file_url",
+        { status: "approved" }
+      );
+
+      if (Array.isArray(data) && data.length > 0) {
+        // The REST API doesn't support column aliases, remap manually
+        tracks = data.map((t) => ({
+          id: t.id,
+          artist_name: t.artist || t.artist_name,
+          track_title: t.title || t.track_title,
+          file_url: t.audio_url || t.file_url,
+        }));
+        console.log(`Found ${tracks.length} track(s) in tracks table via curl.`);
+      } else {
+        console.error("No approved tracks found in any table.");
+        process.exit(1);
+      }
+    }
   }
 
-  if (!tracks || tracks.length === 0) {
-    console.warn("No approved tracks found. Playlist will be empty.");
-  }
-
-  console.log(`Found ${tracks.length} approved track(s).`);
+  console.log(`\nBuilding playlist with ${tracks.length} track(s):\n`);
 
   // Build an ffmpeg concat-demuxer compatible file list.
-  // Format: https://trac.ffmpeg.org/wiki/Concatenate#demuxer
-  const lines = ["# Frequency Factory — 24/7 Stream Playlist", `# Generated ${new Date().toISOString()}`, `# ${tracks.length} track(s)`, ""];
+  const lines = [
+    "# Frequency Factory — 24/7 Stream Playlist",
+    `# Generated ${new Date().toISOString()}`,
+    `# ${tracks.length} track(s)`,
+    "",
+  ];
 
   for (const track of tracks) {
+    console.log(`  • ${track.artist_name} — ${track.track_title}`);
     lines.push(`# ${track.artist_name} — ${track.track_title}`);
     lines.push(`file '${track.file_url}'`);
     lines.push("");
@@ -68,22 +149,7 @@ async function buildPlaylist() {
 
   const outPath = path.resolve(__dirname, "playlist.m3u8");
   fs.writeFileSync(outPath, lines.join("\n"), "utf-8");
-  console.log(`Playlist written to ${outPath}`);
-
-  // Mark tracks as added_to_stream
-  const ids = tracks.map((t) => t.id);
-  if (ids.length > 0) {
-    const { error: updateError } = await supabase
-      .from("approved_tracks")
-      .update({ added_to_stream: true })
-      .in("id", ids);
-
-    if (updateError) {
-      console.warn("Could not mark tracks as added_to_stream:", updateError.message);
-    } else {
-      console.log(`Marked ${ids.length} track(s) as added_to_stream.`);
-    }
-  }
+  console.log(`\nPlaylist written to ${outPath}`);
 }
 
 buildPlaylist().catch((err) => {
