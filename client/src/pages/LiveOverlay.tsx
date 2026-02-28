@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase, type Track, type Settings } from '@/lib/supabase';
+import { supabase, type Track } from '@/lib/supabase';
 import { Music, Target, Sparkles, Zap, Music2 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  OBS Overlay — /overlay                                             */
 /*                                                                     */
-/*  Reads current_track_id from the settings table.                    */
+/*  Reads from the now_playing table (populated by start-stream.js).   */
 /*  Subscribes to Realtime for live updates.                           */
+/*  Falls back to latest approved track if now_playing is empty.       */
 /*  Transparent background for chroma key compositing in OBS.          */
 /*  Displays Pro Engine metrics (4-dimensional Factory Score).         */
 /* ------------------------------------------------------------------ */
@@ -45,33 +46,75 @@ export default function LiveOverlay() {
     if (params.get('metrics') === 'false') setShowMetrics(false);
   }, []);
 
-  /* ---- Fetch current track from settings ---- */
+  /* ---- Fetch current track from now_playing ---- */
   const fetchCurrentTrack = async () => {
-    const { data: settings } = await supabase
-      .from('settings')
-      .select('current_track_id')
-      .limit(1)
-      .single();
-
-    if (settings?.current_track_id) {
-      const { data: trackData } = await supabase
-        .from('tracks')
-        .select('*')
-        .eq('id', settings.current_track_id)
-        .single();
-
-      if (trackData) {
-        // Animate transition
+    // Try now_playing table first (populated by start-stream.js)
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://waapstehyslrjuqnthyj.supabase.co'}/rest/v1/now_playing?select=*&order=started_at.desc&limit=1`,
+        {
+          headers: {
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+            'Accept-Profile': 'public',
+          },
+        }
+      );
+      const npData = await res.json();
+      if (Array.isArray(npData) && npData.length > 0) {
+        const np = npData[0];
+        // If now_playing has a track_id, fetch full track data
+        if (np.track_id) {
+          const { data: trackData } = await supabase
+            .from('tracks')
+            .select('*')
+            .eq('id', np.track_id)
+            .single();
+          if (trackData) {
+            setVisible(false);
+            setTimeout(() => { setTrack(trackData); setVisible(true); }, 400);
+            return;
+          }
+        }
+        // Otherwise resolve by artist + title
+        const { data: trackData } = await supabase
+          .from('tracks')
+          .select('*')
+          .eq('artist', np.artist_name)
+          .eq('title', np.track_title)
+          .limit(1)
+          .single();
+        if (trackData) {
+          setVisible(false);
+          setTimeout(() => { setTrack(trackData); setVisible(true); }, 400);
+          return;
+        }
+        // Build a minimal Track-like object from now_playing data
         setVisible(false);
         setTimeout(() => {
-          setTrack(trackData);
+          setTrack({
+            id: np.id,
+            artist: np.artist_name,
+            title: np.track_title,
+            cover_url: np.cover_url || null,
+            audio_url: '',
+            status: 'approved',
+            genre: null,
+            socials: null,
+            notes: null,
+            average_rating: null,
+            rating_count: 0,
+            total_rating: 0,
+            created_at: np.started_at,
+          } as Track);
           setVisible(true);
         }, 400);
         return;
       }
+    } catch {
+      // now_playing table may not exist yet — fall through to fallback
     }
 
-    // No current track — try latest approved
+    // Fallback: latest approved track
     const { data: latest } = await supabase
       .from('tracks')
       .select('*')
@@ -82,20 +125,17 @@ export default function LiveOverlay() {
 
     if (latest) {
       setVisible(false);
-      setTimeout(() => {
-        setTrack(latest);
-        setVisible(true);
-      }, 400);
+      setTimeout(() => { setTrack(latest); setVisible(true); }, 400);
     }
   };
 
   useEffect(() => {
     fetchCurrentTrack();
 
-    // Subscribe to settings changes
-    const settingsChannel = supabase
-      .channel('overlay_settings')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'settings' }, () => {
+    // Subscribe to now_playing changes
+    const nowPlayingChannel = supabase
+      .channel('overlay_now_playing')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'now_playing' }, () => {
         fetchCurrentTrack();
       })
       .subscribe();
@@ -109,7 +149,7 @@ export default function LiveOverlay() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(settingsChannel);
+      supabase.removeChannel(nowPlayingChannel);
       supabase.removeChannel(tracksChannel);
     };
   }, []);

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   LayoutDashboard, Music, CheckCircle, XCircle, Clock, Trash2,
   Play, Pause, RefreshCw, Bell, BellOff, ArrowLeft, ListOrdered,
-  Star, Volume2,
+  Star, Volume2, Radio,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -178,6 +178,10 @@ export default function AdminDashboard() {
           <button onClick={() => setLocation('/admin/queue')}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#222] text-gray-300 hover:text-white transition text-sm">
             <ListOrdered className="w-4 h-4" /> Queue
+          </button>
+          <button onClick={() => setLocation('/admin/stream')}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#222] text-gray-300 hover:text-white transition text-sm">
+            <Radio className="w-4 h-4" /> Stream
           </button>
           <button onClick={() => setSoundOn(!soundOn)}
             className="p-2 rounded-lg bg-[#222] text-gray-400 hover:text-white transition"

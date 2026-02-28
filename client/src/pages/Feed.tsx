@@ -85,10 +85,10 @@ const TrackCard = ({
           }}
         >
           <img 
-            src={track.artist_image || track.cover_art || '/assets/logo-crown.png'} 
+            src={track.artist_image || track.cover_art || '/assets/frequency-crown-actual.png'}
             alt={track.artistName}
             className="w-full h-full rounded-full object-cover bg-gray-800"
-            onError={(e) => { (e.target as HTMLImageElement).src = '/assets/logo-crown.png'; }}
+            onError={(e) => { (e.target as HTMLImageElement).src = '/assets/frequency-crown-actual.png'; }}
           />
         </div>
         

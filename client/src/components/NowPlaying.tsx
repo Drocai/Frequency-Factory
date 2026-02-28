@@ -34,6 +34,7 @@ export default function NowPlaying() {
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [pulse, setPulse] = useState(true);
+  const [offline, setOffline] = useState(false);
 
   // Fetch now_playing data
   const fetchNowPlaying = useCallback(async () => {
@@ -42,17 +43,25 @@ export default function NowPlaying() {
         `${import.meta.env.VITE_SUPABASE_URL || 'https://waapstehyslrjuqnthyj.supabase.co'}/rest/v1/now_playing?select=*&order=started_at.desc&limit=1`,
         {
           headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhYXBzdGVoeXNscmp1cW50aHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MjAyMDEsImV4cCI6MjA3NzE5NjIwMX0.9HUyry4JU5Tv8xvKeQI_dHtW6guRODUJeLi8fgp77R8',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
             'Accept-Profile': 'public',
           },
         }
       );
       const data = await response.json();
+      // PostgREST returns an object with a "message" key on table-not-found errors
       if (Array.isArray(data) && data.length > 0) {
         setNowPlaying(data[0]);
+        setOffline(false);
+      } else if (Array.isArray(data) && data.length === 0) {
+        // Table exists but is empty — show offline state
+        setOffline(true);
+      } else {
+        // Table doesn't exist yet or API error — show offline
+        setOffline(true);
       }
     } catch {
-      // Silently retry on next poll
+      setOffline(true);
     }
   }, []);
 
@@ -187,6 +196,30 @@ export default function NowPlaying() {
     }
     setSaving(false);
   };
+
+  // Show offline banner when stream isn't running or table doesn't exist
+  if (!nowPlaying && offline) {
+    return (
+      <div
+        className="rounded-2xl p-4 md:p-5"
+        style={{
+          background: 'linear-gradient(135deg, #111 0%, #0a0a0a 100%)',
+          border: '1px solid #222',
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="relative flex items-center gap-1.5">
+            <span className="block w-2.5 h-2.5 rounded-full" style={{ background: '#555' }} />
+            <span className="text-xs font-bold tracking-widest text-gray-500" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+              OFFLINE
+            </span>
+          </div>
+          <Radio className="w-3.5 h-3.5 text-gray-600" />
+          <span className="text-gray-600 text-xs">Stream starting soon...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!nowPlaying) return null;
 
