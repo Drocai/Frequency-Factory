@@ -9,6 +9,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Landing from "./pages/Landing";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminQueue from "./pages/AdminQueue";
+import StreamAdmin from "./pages/StreamAdmin";
 import Listen from "./pages/Listen";
 import LiveOverlay from "./pages/LiveOverlay";
 
@@ -30,6 +31,7 @@ function Router() {
       <Route path={"/"} component={Landing} />
       <Route path={"/admin"} component={AdminDashboard} />
       <Route path={"/admin/queue"} component={AdminQueue} />
+      <Route path={"/admin/stream"} component={StreamAdmin} />
       <Route path={"/listen"} component={Listen} />
       <Route path={"/overlay"} component={LiveOverlay} />
 
