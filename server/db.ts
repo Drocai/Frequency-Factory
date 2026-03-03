@@ -1,7 +1,8 @@
 import { eq, desc, sql, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
+import { createClient } from "@supabase/supabase-js";
+import {
+  InsertUser, users,
   tokenTransactions, InsertTokenTransaction,
   submissions, InsertSubmission,
   predictions, InsertPrediction,
@@ -10,6 +11,19 @@ import {
   notifications, InsertNotification
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+
+// Supabase server client for live stream operations
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://waapstehyslrjuqnthyj.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+
+let _supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabase() {
+  if (!_supabase && SUPABASE_KEY) {
+    _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+  return _supabase;
+}
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -946,4 +960,133 @@ export async function getTopCommenters(timeFilter: 'all' | 'month' | 'week' = 'a
   );
 
   return enrichedResults;
+}
+
+// ============================================
+// LIVE STREAM QUERIES (Supabase)
+// ============================================
+
+/**
+ * Get the currently active live session.
+ */
+export async function getActiveLiveSession() {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  const { data } = await sb
+    .from("live_sessions")
+    .select("*")
+    .eq("is_active", true)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  return data;
+}
+
+/**
+ * Start a new live session. Ends any currently active sessions first.
+ */
+export async function startLiveSession(title?: string) {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  // End any active sessions
+  await (sb.from("live_sessions") as any)
+    .update({ is_active: false, ended_at: new Date().toISOString() })
+    .eq("is_active", true);
+
+  const { data, error } = await (sb.from("live_sessions") as any)
+    .insert({ title: title || "Live Stream" })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[LiveStream] Failed to start session:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * End a live session.
+ */
+export async function endLiveSession(sessionId: string) {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  // Mark all viewers as inactive
+  await (sb.from("live_checkins") as any)
+    .update({ is_active: false })
+    .eq("session_id", sessionId);
+
+  const { error } = await (sb.from("live_sessions") as any)
+    .update({ is_active: false, ended_at: new Date().toISOString() })
+    .eq("id", sessionId);
+
+  if (error) {
+    console.error("[LiveStream] Failed to end session:", error);
+    return { success: false };
+  }
+
+  return { success: true };
+}
+
+// In-memory reward tracking (simple approach for single-server deployment)
+const checkinRewards = new Map<string, Set<number>>(); // sessionId -> Set<userId>
+const activityRewards = new Map<string, Map<number, number>>(); // sessionId -> userId -> lastRewardTimestamp
+
+/**
+ * Check if a user already claimed the check-in reward for a session.
+ */
+export async function hasClaimedCheckinReward(
+  userId: number,
+  sessionId: string
+): Promise<boolean> {
+  const sessionSet = checkinRewards.get(sessionId);
+  return sessionSet?.has(userId) ?? false;
+}
+
+/**
+ * Record that a user claimed the check-in reward.
+ */
+export async function recordCheckinReward(
+  userId: number,
+  sessionId: string
+): Promise<void> {
+  if (!checkinRewards.has(sessionId)) {
+    checkinRewards.set(sessionId, new Set());
+  }
+  checkinRewards.get(sessionId)!.add(userId);
+}
+
+/**
+ * Check if a user can claim an activity reward (5-minute cooldown).
+ */
+export async function canClaimActivityReward(
+  userId: number,
+  sessionId: string
+): Promise<boolean> {
+  const sessionMap = activityRewards.get(sessionId);
+  if (!sessionMap) return true;
+
+  const lastReward = sessionMap.get(userId);
+  if (!lastReward) return true;
+
+  const fiveMinutes = 5 * 60 * 1000;
+  return Date.now() - lastReward >= fiveMinutes;
+}
+
+/**
+ * Record that a user claimed an activity reward.
+ */
+export async function recordActivityReward(
+  userId: number,
+  sessionId: string
+): Promise<void> {
+  if (!activityRewards.has(sessionId)) {
+    activityRewards.set(sessionId, new Map());
+  }
+  activityRewards.get(sessionId)!.set(userId, Date.now());
 }

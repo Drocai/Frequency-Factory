@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase, type Track, type Settings } from '@/lib/supabase';
-import { Music, Target, Sparkles, Zap, Music2 } from 'lucide-react';
+import { supabase, type Track, type Settings, type LiveCheckin } from '@/lib/supabase';
+import { Music, Target, Sparkles, Zap, Music2, Users, Circle } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  OBS Overlay — /overlay                                             */
@@ -32,18 +32,126 @@ function MetricBar({ label, value, color, icon: Icon }: { label: string; value: 
   );
 }
 
+// Viewer count badge for OBS overlay
+function ViewerBadge({ viewers }: { viewers: LiveCheckin[] }) {
+  const activeCount = viewers.filter(v => {
+    const lastActive = new Date(v.last_active_at).getTime();
+    return Date.now() - lastActive < 120_000; // 2 min threshold
+  }).length;
+
+  if (activeCount === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+      style={{
+        background: 'rgba(17,17,17,0.9)',
+        border: '1px solid rgba(255,255,255,0.1)',
+      }}
+    >
+      <Users className="w-3 h-3 text-green-400" />
+      <span className="text-white text-xs font-bold">{activeCount}</span>
+      <span className="text-gray-400 text-[10px]">watching</span>
+    </motion.div>
+  );
+}
+
+// Compact recent check-in names for overlay
+function RecentCheckins({ viewers }: { viewers: LiveCheckin[] }) {
+  const recent = viewers
+    .filter(v => {
+      const lastActive = new Date(v.last_active_at).getTime();
+      return Date.now() - lastActive < 120_000;
+    })
+    .slice(0, 5);
+
+  if (recent.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {recent.map(v => (
+        <motion.div
+          key={v.id}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-1.5"
+        >
+          <Circle className="w-1.5 h-1.5 fill-green-400 text-green-400" />
+          <span className="text-white text-[10px] font-medium">
+            {v.user_name || 'Anonymous'}
+          </span>
+        </motion.div>
+      ))}
+      {viewers.length > 5 && (
+        <span className="text-gray-500 text-[9px] pl-3">
+          +{viewers.length - 5} more
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function LiveOverlay() {
   const [track, setTrack] = useState<Track | null>(null);
   const [visible, setVisible] = useState(false);
   const [transparent, setTransparent] = useState(true);
   const [showMetrics, setShowMetrics] = useState(true);
+  const [showViewers, setShowViewers] = useState(true);
+  const [viewers, setViewers] = useState<LiveCheckin[]>([]);
 
   // Check URL params for options
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('bg') === 'dark') setTransparent(false);
     if (params.get('metrics') === 'false') setShowMetrics(false);
+    if (params.get('viewers') === 'false') setShowViewers(false);
   }, []);
+
+  // Fetch active viewers for current live session
+  useEffect(() => {
+    if (!showViewers) return;
+
+    const fetchViewers = async () => {
+      const { data: session } = await supabase
+        .from('live_sessions')
+        .select('id')
+        .eq('is_active', true)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!session) return;
+
+      const { data } = await supabase
+        .from('live_checkins')
+        .select('*')
+        .eq('session_id', session.id)
+        .eq('is_active', true)
+        .order('checked_in_at', { ascending: false });
+
+      if (data) setViewers(data);
+    };
+
+    fetchViewers();
+
+    // Subscribe to check-in changes
+    const channel = supabase
+      .channel('overlay_viewers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'live_checkins' }, () => {
+        fetchViewers();
+      })
+      .subscribe();
+
+    // Refresh every 30 seconds to update "active" status
+    const interval = setInterval(fetchViewers, 30_000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [showViewers]);
 
   /* ---- Fetch current track from settings ---- */
   const fetchCurrentTrack = async () => {
@@ -250,6 +358,14 @@ export default function LiveOverlay() {
           Rate this track at frequencyfactory.io
         </div>
       </div>
+
+      {/* Viewer count — top right under watermark */}
+      {showViewers && viewers.length > 0 && (
+        <div className="fixed top-14 right-4 flex flex-col items-end gap-2">
+          <ViewerBadge viewers={viewers} />
+          <RecentCheckins viewers={viewers} />
+        </div>
+      )}
     </div>
   );
 }

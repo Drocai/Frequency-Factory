@@ -71,6 +71,8 @@ export const tokenTransactions = mysqlTable("tokenTransactions", {
     "referral",          // +10 FT for referral
     "admin_grant",       // Admin granted tokens
     "admin_deduct",      // Admin deducted tokens
+    "stream_checkin",    // +2 FT for checking in to a live stream
+    "stream_activity",   // +1 FT for sustained stream activity
   ]).notNull(),
   /** Optional reference to related entity (submission_id, comment_id, etc.) */
   referenceId: int("referenceId"),
