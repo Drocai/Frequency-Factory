@@ -100,3 +100,34 @@ CREATE POLICY "Public can insert live chat"
   WITH CHECK (true);
 
 ALTER PUBLICATION supabase_realtime ADD TABLE live_chat_messages;
+
+-- ============================================
+-- LIVE AUDIO REPORTS (viewer feedback on audio)
+-- ============================================
+CREATE TABLE IF NOT EXISTS live_audio_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES live_sessions(id) ON DELETE CASCADE,
+  user_id INT NOT NULL,
+  user_name TEXT,
+  report_type TEXT DEFAULT 'cant_hear',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_audio_reports_session ON live_audio_reports(session_id);
+
+ALTER TABLE live_audio_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public can read audio reports"
+  ON live_audio_reports FOR SELECT
+  USING (true);
+
+CREATE POLICY "Public can insert audio reports"
+  ON live_audio_reports FOR INSERT
+  WITH CHECK (true);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE live_audio_reports;
+
+-- Add audio_status column to live_sessions
+ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS audio_status TEXT DEFAULT 'unknown';
+-- Values: 'live' (audio confirmed), 'muted' (streamer knows it's muted), 'unknown' (default)
+ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS cant_hear_count INT DEFAULT 0;

@@ -611,6 +611,29 @@ export const appRouter = router({
 
         return { success: true, awarded: 1, balance: newBalance };
       }),
+
+    // Set audio status (admin — streamer toggle)
+    setAudioStatus: protectedProcedure
+      .input(z.object({
+        sessionId: z.string().uuid(),
+        status: z.enum(['live', 'muted', 'unknown']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.setAudioStatus(input.sessionId, input.status);
+      }),
+
+    // Clear "can't hear" reports (admin — after fixing audio)
+    clearAudioReports: protectedProcedure
+      .input(z.object({ sessionId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.clearAudioReports(input.sessionId);
+      }),
   }),
 });
 

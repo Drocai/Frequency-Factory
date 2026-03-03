@@ -6,12 +6,14 @@ import {
   type LiveChatMessage,
 } from "@/lib/supabase";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Send, MessageCircle } from "lucide-react";
+import { Send, MessageCircle, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast } from "sonner";
 
 const MAX_MESSAGE_LENGTH = 300;
 const MESSAGE_COOLDOWN = 2000; // 2 seconds between messages
+const AUDIO_REPORT_COOLDOWN = 30_000; // 30 seconds between "can't hear" reports
 
 export default function LiveStreamChat({
   sessionId,
@@ -22,6 +24,7 @@ export default function LiveStreamChat({
   const [messages, setMessages] = useState<LiveChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [cooldown, setCooldown] = useState(false);
+  const [audioReportCooldown, setAudioReportCooldown] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Fetch chat history
@@ -207,7 +210,7 @@ export default function LiveStreamChat({
 
       {/* Input */}
       {user ? (
-        <div className="p-3 border-t border-zinc-800">
+        <div className="p-3 border-t border-zinc-800 space-y-2">
           <div className="flex gap-2">
             <input
               type="text"
@@ -227,6 +230,58 @@ export default function LiveStreamChat({
               <Send className="h-4 w-4" />
             </Button>
           </div>
+          {/* Audio feedback button */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={audioReportCooldown}
+            onClick={async () => {
+              if (!sessionId || !user || audioReportCooldown) return;
+              setAudioReportCooldown(true);
+
+              // Insert audio report
+              await supabase.from("live_audio_reports").insert({
+                session_id: sessionId,
+                user_id: user.id,
+                user_name: user.name || "Anonymous",
+                report_type: "cant_hear",
+              });
+
+              // Increment the session's cant_hear_count
+              const { data: sess } = await supabase
+                .from("live_sessions")
+                .select("cant_hear_count")
+                .eq("id", sessionId)
+                .single();
+
+              if (sess) {
+                await (supabase.from("live_sessions") as any)
+                  .update({
+                    cant_hear_count: (sess.cant_hear_count || 0) + 1,
+                  })
+                  .eq("id", sessionId);
+              }
+
+              // Also post a system message
+              await supabase.from("live_chat_messages").insert({
+                session_id: sessionId,
+                user_id: user.id,
+                user_name: user.name || "Anonymous",
+                message: `${user.name || "Someone"} can't hear the audio!`,
+                message_type: "system",
+              });
+
+              toast.info("Audio report sent to streamer");
+              setTimeout(
+                () => setAudioReportCooldown(false),
+                AUDIO_REPORT_COOLDOWN
+              );
+            }}
+            className="w-full border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 text-xs h-7"
+          >
+            <VolumeX className="h-3 w-3 mr-1.5" />
+            {audioReportCooldown ? "Report sent" : "Can't hear the audio!"}
+          </Button>
         </div>
       ) : (
         <div className="p-3 border-t border-zinc-800 text-center">

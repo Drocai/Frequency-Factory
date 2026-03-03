@@ -50,6 +50,17 @@ export type LiveSession = {
   peak_viewers: number;
   total_checkins: number;
   total_messages: number;
+  audio_status: 'live' | 'muted' | 'unknown';
+  cant_hear_count: number;
+};
+
+export type LiveAudioReport = {
+  id: string;
+  session_id: string;
+  user_id: number;
+  user_name: string | null;
+  report_type: string;
+  created_at: string;
 };
 
 export type LiveCheckin = {

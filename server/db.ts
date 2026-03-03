@@ -1090,3 +1090,40 @@ export async function recordActivityReward(
   }
   activityRewards.get(sessionId)!.set(userId, Date.now());
 }
+
+/**
+ * Set the audio status for a live session.
+ */
+export async function setAudioStatus(
+  sessionId: string,
+  status: "live" | "muted" | "unknown"
+) {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  const { error } = await (sb.from("live_sessions") as any)
+    .update({ audio_status: status })
+    .eq("id", sessionId);
+
+  if (error) {
+    console.error("[LiveStream] Failed to set audio status:", error);
+    return { success: false };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Clear all "can't hear" reports for a session (after fixing audio).
+ */
+export async function clearAudioReports(sessionId: string) {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  // Reset counter on session
+  await (sb.from("live_sessions") as any)
+    .update({ cant_hear_count: 0, audio_status: "live" })
+    .eq("id", sessionId);
+
+  return { success: true };
+}

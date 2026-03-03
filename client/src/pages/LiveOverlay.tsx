@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase, type Track, type Settings, type LiveCheckin } from '@/lib/supabase';
-import { Music, Target, Sparkles, Zap, Music2, Users, Circle } from 'lucide-react';
+import { supabase, type Track, type Settings, type LiveCheckin, type LiveSession } from '@/lib/supabase';
+import { Music, Target, Sparkles, Zap, Music2, Users, Circle, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  OBS Overlay — /overlay                                             */
@@ -93,6 +93,74 @@ function RecentCheckins({ viewers }: { viewers: LiveCheckin[] }) {
   );
 }
 
+// Audio status indicator for OBS overlay — flashes when viewers can't hear
+function AudioStatusBadge({ session }: { session: LiveSession | null }) {
+  if (!session) return null;
+
+  const cantHear = session.cant_hear_count || 0;
+  const audioStatus = session.audio_status || 'unknown';
+
+  // Determine state
+  const isMuted = audioStatus === 'muted';
+  const hasReports = cantHear > 0;
+  const isAlert = isMuted || hasReports;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="flex items-center gap-2"
+    >
+      {/* Main audio badge */}
+      <motion.div
+        animate={isAlert ? {
+          borderColor: ['rgba(239,68,68,0.8)', 'rgba(239,68,68,0.2)', 'rgba(239,68,68,0.8)'],
+          boxShadow: [
+            '0 0 20px rgba(239,68,68,0.4)',
+            '0 0 5px rgba(239,68,68,0.1)',
+            '0 0 20px rgba(239,68,68,0.4)',
+          ],
+        } : {}}
+        transition={isAlert ? { duration: 1.5, repeat: Infinity } : {}}
+        className="flex items-center gap-2 px-3 py-2 rounded-lg"
+        style={{
+          background: isAlert
+            ? 'rgba(239,68,68,0.15)'
+            : 'rgba(34,197,94,0.1)',
+          border: `2px solid ${isAlert ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.3)'}`,
+        }}
+      >
+        {isAlert ? (
+          <VolumeX className="w-5 h-5 text-red-400" />
+        ) : (
+          <Volume2 className="w-4 h-4 text-green-400" />
+        )}
+
+        <span className={`text-xs font-bold tracking-wide ${isAlert ? 'text-red-400' : 'text-green-400'}`}>
+          {isMuted ? 'AUDIO MUTED' : hasReports ? 'CHECK AUDIO' : 'AUDIO OK'}
+        </span>
+      </motion.div>
+
+      {/* "Can't hear" counter */}
+      {hasReports && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg"
+          style={{
+            background: 'rgba(239,68,68,0.15)',
+            border: '1px solid rgba(239,68,68,0.3)',
+          }}
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+          <span className="text-red-400 text-xs font-bold">{cantHear}</span>
+          <span className="text-red-400/60 text-[10px]">can't hear</span>
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}
+
 export default function LiveOverlay() {
   const [track, setTrack] = useState<Track | null>(null);
   const [visible, setVisible] = useState(false);
@@ -100,6 +168,7 @@ export default function LiveOverlay() {
   const [showMetrics, setShowMetrics] = useState(true);
   const [showViewers, setShowViewers] = useState(true);
   const [viewers, setViewers] = useState<LiveCheckin[]>([]);
+  const [liveSession, setLiveSession] = useState<LiveSession | null>(null);
 
   // Check URL params for options
   useEffect(() => {
@@ -107,6 +176,38 @@ export default function LiveOverlay() {
     if (params.get('bg') === 'dark') setTransparent(false);
     if (params.get('metrics') === 'false') setShowMetrics(false);
     if (params.get('viewers') === 'false') setShowViewers(false);
+  }, []);
+
+  // Fetch active live session (for audio status)
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data } = await supabase
+        .from('live_sessions')
+        .select('*')
+        .eq('is_active', true)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data) setLiveSession(data as LiveSession);
+    };
+
+    fetchSession();
+
+    // Subscribe to session updates (including audio status changes)
+    const channel = supabase
+      .channel('overlay_session_audio')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'live_sessions' }, () => {
+        fetchSession();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_audio_reports' }, () => {
+        fetchSession(); // Refresh to get updated cant_hear_count
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Fetch active viewers for current live session
@@ -351,8 +452,13 @@ export default function LiveOverlay() {
         </span>
       </div>
 
-      {/* CTA overlay — top left */}
-      <div className="fixed top-4 left-4 opacity-60">
+      {/* Audio status — top left (prominent, flashes red when muted) */}
+      <div className="fixed top-4 left-4">
+        <AudioStatusBadge session={liveSession} />
+      </div>
+
+      {/* CTA overlay — below audio status */}
+      <div className="fixed top-16 left-4 opacity-60">
         <div className="px-3 py-1.5 rounded-full text-[10px] font-bold tracking-wider text-orange-400"
           style={{ background: 'rgba(255,69,0,0.1)', border: '1px solid rgba(255,69,0,0.2)' }}>
           Rate this track at frequencyfactory.io
