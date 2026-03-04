@@ -71,5 +71,14 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  return trpcMiddleware(req as any, res as any);
+  // The tRPC Express adapter reads req.path (Express-specific) to extract the
+  // procedure name. Vercel's VercelRequest doesn't have req.path, so we set it
+  // from the [trpc] catch-all route parameter.
+  const trpcPath = Array.isArray(req.query.trpc) ? req.query.trpc.join('/') : req.query.trpc || '';
+  // Preserve the original query string for tRPC input parsing
+  const qs = (req.url || '').includes('?') ? (req.url || '').slice((req.url || '').indexOf('?')) : '';
+  (req as any).path = `/${trpcPath}`;
+  (req as any).url = `/${trpcPath}${qs}`;
+  (req as any).baseUrl = '';
+  return trpcMiddleware(req as any, res as any, () => {});
 }

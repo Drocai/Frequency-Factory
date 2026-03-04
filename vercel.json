@@ -1,12 +1,7 @@
 {
-  "buildCommand": "npx vite build",
+  "buildCommand": "npx vite build && node scripts/build-api.mjs",
   "outputDirectory": "dist/public",
   "framework": null,
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "@vercel/node@3"
-    }
-  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
