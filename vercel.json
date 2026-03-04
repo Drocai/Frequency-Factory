@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx vite build && node scripts/build-api.mjs",
+  "buildCommand": "npx tsc --noEmit && npx vite build && node scripts/build-api.mjs",
   "outputDirectory": "dist/public",
   "framework": null,
   "rewrites": [
