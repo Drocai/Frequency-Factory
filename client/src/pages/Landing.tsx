@@ -359,7 +359,7 @@ function CertifiedBadgePreview() {
       <div className="flex items-center justify-center gap-2 mb-3">
         <Shield className="w-5 h-5 text-orange-400" />
         <h3 className="text-white font-bold text-sm" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
-          WHAT YOU'RE COMPETING FOR
+          WHAT YOU'RE BUILDING TOWARD
         </h3>
       </div>
 

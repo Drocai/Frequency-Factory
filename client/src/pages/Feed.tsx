@@ -35,6 +35,29 @@ const colors = {
   gradientPrimary: 'linear-gradient(135deg, #FF4500 0%, #FF6B35 100%)',
 };
 
+const isDirectAudioUrl = (url?: string | null) => {
+  if (!url) return false;
+  const u = url.trim().toLowerCase();
+  return (
+    u.includes("supabase.co/storage") ||
+    u.endsWith(".mp3") ||
+    u.endsWith(".wav") ||
+    u.endsWith(".ogg") ||
+    u.endsWith(".m4a")
+  );
+};
+
+const isStreamingPlatformUrl = (url?: string | null) => {
+  if (!url) return false;
+  const u = url.trim().toLowerCase();
+  return (
+    u.includes("youtube.com") ||
+    u.includes("youtu.be") ||
+    u.includes("open.spotify.com") ||
+    u.includes("soundcloud.com")
+  );
+};
+
 // Static waveform visualization (when no audio URL)
 const StaticWaveform = () => (
   <div className="h-12 flex items-end justify-center gap-[2px] px-2">
@@ -113,15 +136,21 @@ const TrackCard = ({
 
       {/* Audio Player */}
       <div className="mb-4">
-        {track.streamingLink ? (
-          <StreamingPlayer 
-            url={track.streamingLink} 
-            height={80}
-            showControls={true}
-          />
-        ) : (
-          <StaticWaveform />
-        )}
+        {(() => {
+          const url = track.streamingLink?.trim();
+          if (!url) return <StaticWaveform />;
+          if (isDirectAudioUrl(url)) {
+            return (
+              <audio controls preload="none" style={{ width: "100%" }}>
+                <source src={url} />
+              </audio>
+            );
+          }
+          if (isStreamingPlatformUrl(url)) {
+            return <StreamingPlayer url={url} height={80} showControls={true} />;
+          }
+          return <StaticWaveform />;
+        })()}
       </div>
 
       {/* Engagement Row */}
