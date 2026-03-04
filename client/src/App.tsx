@@ -11,6 +11,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminQueue from "./pages/AdminQueue";
 import Listen from "./pages/Listen";
 import LiveOverlay from "./pages/LiveOverlay";
+import Live from "./pages/Live";
 
 // Legacy / supplemental routes
 import Feed from "./pages/Feed";
@@ -32,6 +33,7 @@ function Router() {
       <Route path={"/admin/queue"} component={AdminQueue} />
       <Route path={"/listen"} component={Listen} />
       <Route path={"/overlay"} component={LiveOverlay} />
+      <Route path={"/live"} component={Live} />
 
       {/* Legacy / supplemental routes */}
       <Route path={"/avatar"} component={AvatarSelection} />

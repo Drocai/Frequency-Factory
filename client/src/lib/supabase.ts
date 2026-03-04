@@ -38,6 +38,55 @@ export type Settings = {
   updated_at: string;
 };
 
+// ---------- Live Stream Types ----------
+
+export type LiveSession = {
+  id: string;
+  title: string;
+  started_at: string;
+  ended_at: string | null;
+  is_active: boolean;
+  viewer_count: number;
+  peak_viewers: number;
+  total_checkins: number;
+  total_messages: number;
+  audio_status: 'live' | 'muted' | 'unknown';
+  cant_hear_count: number;
+};
+
+export type LiveAudioReport = {
+  id: string;
+  session_id: string;
+  user_id: number;
+  user_name: string | null;
+  report_type: string;
+  created_at: string;
+};
+
+export type LiveCheckin = {
+  id: string;
+  session_id: string;
+  user_id: number;
+  user_name: string | null;
+  avatar_name: string;
+  checked_in_at: string;
+  last_active_at: string;
+  is_active: boolean;
+  activity_score: number;
+  messages_sent: number;
+};
+
+export type LiveChatMessage = {
+  id: string;
+  session_id: string;
+  user_id: number;
+  user_name: string | null;
+  avatar_name: string;
+  message: string;
+  message_type: string;
+  created_at: string;
+};
+
 // ---------- Helpers ----------
 
 const GENRES = [
@@ -53,7 +102,13 @@ export function getAnonUserId(): string {
   const key = 'ff_anon_user_id';
   let id = localStorage.getItem(key);
   if (!id) {
-    id = crypto.randomUUID();
+    id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+            const r = (Math.random() * 16) | 0;
+            return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+          });
     localStorage.setItem(key, id);
   }
   return id;

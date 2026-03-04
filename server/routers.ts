@@ -530,6 +530,111 @@ export const appRouter = router({
         return db.getRecentActivity(input?.limit);
       }),
   }),
+
+  // ============================================
+  // LIVE STREAM ROUTER
+  // ============================================
+  live: router({
+    // Get active session (public)
+    getActiveSession: publicProcedure.query(async () => {
+      return db.getActiveLiveSession();
+    }),
+
+    // Start a new live session (admin only)
+    startSession: protectedProcedure
+      .input(z.object({ title: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.startLiveSession(input.title);
+      }),
+
+    // End a live session (admin only)
+    endSession: protectedProcedure
+      .input(z.object({ sessionId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.endLiveSession(input.sessionId);
+      }),
+
+    // Claim check-in reward (+2 FT, once per session)
+    claimCheckinReward: protectedProcedure
+      .input(z.object({ sessionId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        // Check if already claimed for this session
+        const alreadyClaimed = await db.hasClaimedCheckinReward(
+          ctx.user.id,
+          input.sessionId
+        );
+        if (alreadyClaimed) {
+          return { success: false, error: "already_claimed" };
+        }
+
+        // Award 2 FT for checking in
+        const newBalance = await db.awardTokens(
+          ctx.user.id,
+          2,
+          "stream_checkin",
+          "Checked in to live stream"
+        );
+
+        // Mark as claimed
+        await db.recordCheckinReward(ctx.user.id, input.sessionId);
+
+        return { success: true, awarded: 2, balance: newBalance };
+      }),
+
+    // Claim activity reward (+1 FT for staying active 5+ min)
+    claimActivityReward: protectedProcedure
+      .input(z.object({ sessionId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        // Check cooldown (one activity reward per 5 minutes)
+        const canClaim = await db.canClaimActivityReward(
+          ctx.user.id,
+          input.sessionId
+        );
+        if (!canClaim) {
+          return { success: false, error: "cooldown" };
+        }
+
+        const newBalance = await db.awardTokens(
+          ctx.user.id,
+          1,
+          "stream_activity",
+          "Active during live stream"
+        );
+
+        await db.recordActivityReward(ctx.user.id, input.sessionId);
+
+        return { success: true, awarded: 1, balance: newBalance };
+      }),
+
+    // Set audio status (admin — streamer toggle)
+    setAudioStatus: protectedProcedure
+      .input(z.object({
+        sessionId: z.string().uuid(),
+        status: z.enum(['live', 'muted', 'unknown']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.setAudioStatus(input.sessionId, input.status);
+      }),
+
+    // Clear "can't hear" reports (admin — after fixing audio)
+    clearAudioReports: protectedProcedure
+      .input(z.object({ sessionId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new Error('Unauthorized: Admin access required');
+        }
+        return db.clearAudioReports(input.sessionId);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

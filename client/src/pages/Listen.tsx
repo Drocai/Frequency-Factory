@@ -38,10 +38,17 @@ function ProRatingBadge({
     if (saving) return;
     setSaving(true);
     const userId = getAnonUserId();
-    // Save as composite rating (overall score mapped to 1-5 for backwards compat)
     const mappedRating = Math.max(1, Math.min(5, Math.round(overall / 20)));
     const { error } = await supabase.from('ratings').upsert(
-      { track_id: trackId, user_id: userId, rating: mappedRating },
+      {
+        track_id: trackId,
+        user_id: userId,
+        rating: mappedRating,
+        hook_strength: metrics.hook,
+        production_quality: metrics.production,
+        originality: metrics.originality,
+        vibe: metrics.vibe,
+      },
       { onConflict: 'track_id,user_id' },
     );
     setSaving(false);

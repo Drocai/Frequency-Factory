@@ -5,7 +5,7 @@ import { CheckCircle2, ExternalLink, Sparkles, Check, LogIn } from 'lucide-react
 import { detectPlatform, getPlatformInfo } from '@/lib/streamingUtils';
 import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
-import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
 import { Button } from '@/components/ui/button';
@@ -63,20 +63,31 @@ export default function Submit() {
     notes: '',
   });
 
-  // tRPC mutation for creating submission
-  const createSubmission = trpc.submissions.create.useMutation({
-    onSuccess: (data) => {
-      if (data) {
-        setTicketNumber(data.ticketNumber || `#${data.id}`);
-        setSubmitted(true);
-        toast.success(`Track submitted! +1 FT earned`);
-      }
-    },
-    onError: (error) => {
-      toast.error('Failed to submit track: ' + error.message);
+  const handleSupabaseSubmit = async (data: FormData) => {
+    const platform = detectPlatform(data.streamingLink);
+    const { data: inserted, error } = await supabase
+      .from("tracks")
+      .insert({
+        artist: data.artistName.trim(),
+        title: data.trackTitle.trim(),
+        genre: data.genre || null,
+        audio_url: data.streamingLink || null,
+        notes: data.notes.trim() || null,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      toast.error("Failed to submit track: " + error.message);
       setIsSubmitting(false);
-    },
-  });
+      return;
+    }
+
+    setTicketNumber(`#${inserted.id.slice(0, 8).toUpperCase()}`);
+    setSubmitted(true);
+    toast.success("Track submitted! +1 FT earned");
+  };
 
   // Calculate completeness score
   const calculateCompleteness = (): number => {
@@ -111,21 +122,7 @@ export default function Submit() {
     }
 
     setIsSubmitting(true);
-
-    // Detect platform from streaming link
-    const platform = detectPlatform(formData.streamingLink);
-
-    createSubmission.mutate({
-      artistName: formData.artistName,
-      trackTitle: formData.trackTitle,
-      email: formData.email || undefined,
-      bestTimestamp: formData.bestTimestamp || undefined,
-      streamingLink: formData.streamingLink || undefined,
-      genre: formData.genre || undefined,
-      aiAssisted: formData.aiAssisted,
-      notes: formData.notes || undefined,
-      platform: platform !== 'unknown' ? platform : undefined,
-    });
+    await handleSupabaseSubmit(formData);
   };
 
   if (submitted) {
