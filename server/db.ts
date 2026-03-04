@@ -979,7 +979,7 @@ export async function getActiveLiveSession() {
     .eq("is_active", true)
     .order("started_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   return data;
 }
