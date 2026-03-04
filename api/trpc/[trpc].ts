@@ -17,6 +17,9 @@ import * as db from "../../server/db";
 // NO app feature routers (tokens, submissions, predictions, etc.).
 const authApiRouter = router({
   system: systemRouter,
+  dbPing: publicProcedure.query(async () => {
+    return db.dbPing();
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

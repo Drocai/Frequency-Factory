@@ -40,6 +40,32 @@ export async function getDb() {
   return _db;
 }
 
+/** Run SELECT 1 against DATABASE_URL — returns { ok, error?, latencyMs, meta }. */
+export async function dbPing(): Promise<{ ok: boolean; error?: string; latencyMs: number; meta?: Record<string, unknown> }> {
+  const start = Date.now();
+  const dbUrl = process.env.DATABASE_URL || "";
+  const meta: Record<string, unknown> = {
+    hasUrl: !!dbUrl,
+    protocol: dbUrl.split("://")[0] || "none",
+    host: dbUrl ? new URL(dbUrl).host : "none",
+  };
+  try {
+    const db = await getDb();
+    if (!db) return { ok: false, error: "no DATABASE_URL or connection failed", latencyMs: Date.now() - start, meta };
+    await db.execute(sql`SELECT 1`);
+    return { ok: true, latencyMs: Date.now() - start, meta };
+  } catch (e: any) {
+    // Unwrap Drizzle's wrapper to get the real mysql2 error
+    const cause = e?.cause || e;
+    return {
+      ok: false,
+      error: cause?.message || e?.message || String(e),
+      latencyMs: Date.now() - start,
+      meta: { ...meta, code: cause?.code, errno: cause?.errno },
+    };
+  }
+}
+
 // ============================================
 // USER QUERIES
 // ============================================
