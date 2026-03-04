@@ -15,9 +15,9 @@ export default function Live() {
         .eq("is_active", true)
         .order("started_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      setSession(data);
+      setSession(data ?? null);
     };
 
     fetchSession();

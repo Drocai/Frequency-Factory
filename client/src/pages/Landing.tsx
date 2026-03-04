@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { supabase, GENRES } from '@/lib/supabase';
@@ -399,6 +399,35 @@ export default function Landing() {
   const [, setLocation] = useLocation();
   const [drafts, setDrafts] = useState<TrackDraft[]>([emptyDraft()]);
   const [submitting, setSubmitting] = useState(false);
+  const [recentSubmissions, setRecentSubmissions] = useState<
+    { artistName: string; genre: string; timestamp: string }[]
+  >([]);
+
+  useEffect(() => {
+    const fetchRecent = async () => {
+      const { data } = await supabase
+        .from("tracks")
+        .select("artist, genre, created_at")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (data && data.length > 0) {
+        setRecentSubmissions(
+          data.map(t => {
+            const mins = Math.floor(
+              (Date.now() - new Date(t.created_at).getTime()) / 60000
+            );
+            return {
+              artistName: t.artist || "Unknown",
+              genre: t.genre || "Music",
+              timestamp: mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`,
+            };
+          })
+        );
+      }
+    };
+    fetchRecent();
+  }, []);
 
   const updateDraft = (idx: number, d: TrackDraft) => {
     setDrafts((prev) => prev.map((p, i) => (i === idx ? d : p)));
@@ -513,7 +542,7 @@ export default function Landing() {
       </nav>
 
       {/* Social Proof Marquee */}
-      <SocialProofMarquee />
+      <SocialProofMarquee submissions={recentSubmissions} />
 
       {/* Hero */}
       <section className="relative flex flex-col items-center justify-center px-6 pt-16 pb-8 text-center overflow-hidden"

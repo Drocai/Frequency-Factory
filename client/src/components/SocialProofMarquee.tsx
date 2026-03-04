@@ -24,12 +24,18 @@ interface SocialProofMarqueeProps {
 }
 
 export default function SocialProofMarquee({ submissions }: SocialProofMarqueeProps) {
-  const items = submissions && submissions.length > 0 ? submissions : DEMO_SUBMISSIONS;
+  const isDemo = !submissions || submissions.length === 0;
+  const items = isDemo ? DEMO_SUBMISSIONS : submissions;
   // Double the items for seamless infinite scroll
   const doubled = [...items, ...items];
 
   return (
-    <div className="w-full overflow-hidden py-3" style={{ background: 'rgba(255,69,0,0.05)', borderTop: '1px solid #222', borderBottom: '1px solid #222' }}>
+    <div className="w-full overflow-hidden py-3 relative" style={{ background: 'rgba(255,69,0,0.05)', borderTop: '1px solid #222', borderBottom: '1px solid #222' }}>
+      {isDemo && (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-[9px] uppercase tracking-wider text-gray-600 bg-gray-900/80 px-2 py-0.5 rounded">
+          demo
+        </span>
+      )}
       <motion.div
         className="flex gap-6 whitespace-nowrap"
         animate={{ x: [0, -(items.length * 240)] }}

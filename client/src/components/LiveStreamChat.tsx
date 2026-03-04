@@ -105,7 +105,7 @@ export default function LiveStreamChat({
       .from("live_sessions")
       .select("total_messages")
       .eq("id", sessionId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data) {
           supabase
@@ -252,7 +252,7 @@ export default function LiveStreamChat({
                 .from("live_sessions")
                 .select("cant_hear_count")
                 .eq("id", sessionId)
-                .single();
+                .maybeSingle();
 
               if (sess) {
                 await (supabase.from("live_sessions") as any)

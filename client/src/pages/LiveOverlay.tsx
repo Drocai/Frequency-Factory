@@ -187,7 +187,7 @@ export default function LiveOverlay() {
         .eq('is_active', true)
         .order('started_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (data) setLiveSession(data as LiveSession);
     };
@@ -221,7 +221,7 @@ export default function LiveOverlay() {
         .eq('is_active', true)
         .order('started_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (!session) return;
 
@@ -260,14 +260,14 @@ export default function LiveOverlay() {
       .from('settings')
       .select('current_track_id')
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (settings?.current_track_id) {
       const { data: trackData } = await supabase
         .from('tracks')
         .select('*')
         .eq('id', settings.current_track_id)
-        .single();
+        .maybeSingle();
 
       if (trackData) {
         // Animate transition
@@ -287,7 +287,7 @@ export default function LiveOverlay() {
       .eq('status', 'approved')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (latest) {
       setVisible(false);

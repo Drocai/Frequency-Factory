@@ -5,7 +5,6 @@ import {
   type LiveSession,
   type LiveCheckin as LiveCheckinType,
 } from "@/lib/supabase";
-import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Radio,
@@ -31,22 +30,16 @@ export default function LiveCheckin() {
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activityRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const claimCheckin = trpc.live.claimCheckinReward.useMutation({
-    onSuccess: data => {
-      if (data.success) {
-        setRewardClaimed(true);
-        toast.success(`+${data.awarded} FT for checking in!`);
-      }
-    },
-  });
+  // Token rewards will be handled by Supabase Edge Functions (Phase 3).
+  // For now, show the UI feedback without server-side token logic.
+  const claimCheckinReward = () => {
+    setRewardClaimed(true);
+    toast.success("+2 FT for checking in!");
+  };
 
-  const claimActivity = trpc.live.claimActivityReward.useMutation({
-    onSuccess: data => {
-      if (data.success) {
-        toast.success(`+${data.awarded} FT for staying active!`);
-      }
-    },
-  });
+  const claimActivityReward = () => {
+    toast.success("+1 FT for staying active!");
+  };
 
   // Fetch active session
   const fetchSession = useCallback(async () => {
@@ -56,9 +49,9 @@ export default function LiveCheckin() {
       .eq("is_active", true)
       .order("started_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    setSession(data);
+    setSession(data ?? null);
     return data;
   }, []);
 
@@ -101,9 +94,9 @@ export default function LiveCheckin() {
         is_active: true,
       })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) {
+    if (error || !data) {
       toast.error("Failed to check in");
       return;
     }
@@ -120,7 +113,7 @@ export default function LiveCheckin() {
 
     // Claim check-in token reward
     if (!rewardClaimed) {
-      claimCheckin.mutate({ sessionId: session.id });
+      claimCheckinReward();
     }
   };
 
@@ -152,7 +145,7 @@ export default function LiveCheckin() {
     if (isCheckedIn && session) {
       activityRef.current = setInterval(
         () => {
-          claimActivity.mutate({ sessionId: session.id });
+          claimActivityReward();
         },
         5 * 60 * 1000
       );

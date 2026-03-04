@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, Heart, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
-import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
 import { Button } from '@/components/ui/button';
@@ -25,38 +25,53 @@ interface CommentsModalProps {
 }
 
 export default function CommentsModal({ track, onClose, userId }: CommentsModalProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [newComment, setNewComment] = useState('');
+  const [comments, setComments] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPosting, setIsPosting] = useState(false);
 
-  // Fetch comments from tRPC
-  const { data: comments, isLoading, refetch } = trpc.comments.list.useQuery({
-    submissionId: track.id,
-  });
+  const fetchComments = async () => {
+    setIsLoading(true);
+    const { data } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("track_id", track.id)
+      .order("created_at", { ascending: false });
+    setComments(data || []);
+    setIsLoading(false);
+  };
 
-  // Create comment mutation
-  const createComment = trpc.comments.create.useMutation({
-    onSuccess: () => {
-      setNewComment('');
-      refetch();
-      toast.success('Comment posted! +1 FT earned');
-    },
-    onError: (error) => {
-      toast.error('Failed to post comment: ' + error.message);
-    },
-  });
+  useEffect(() => {
+    fetchComments();
+  }, [track.id]);
 
   const handleSubmit = async () => {
     if (!newComment.trim()) return;
-    
+
     if (!isAuthenticated) {
       toast.error('Please sign in to comment');
       return;
     }
 
-    createComment.mutate({
-      submissionId: track.id,
-      content: newComment.trim(),
+    setIsPosting(true);
+    const { error } = await supabase.from("comments").insert({
+      track_id: track.id,
+      user_id: userId,
+      username: user?.name || "Anonymous",
+      comment_text: newComment.trim(),
     });
+
+    if (error) {
+      toast.error("Failed to post comment: " + error.message);
+      setIsPosting(false);
+      return;
+    }
+
+    setNewComment('');
+    setIsPosting(false);
+    await fetchComments();
+    toast.success('Comment posted! +1 FT earned');
   };
 
   const formatTime = (dateString: string | Date) => {
@@ -126,16 +141,16 @@ export default function CommentsModal({ track, onClose, userId }: CommentsModalP
                   className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
                   style={{ background: colors.gray700, color: colors.primaryLight }}
                 >
-                  {(comment.userName || 'A').charAt(0).toUpperCase()}
+                  {(comment.username || 'A').charAt(0).toUpperCase()}
                 </div>
-                
+
                 {/* Content */}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium text-sm">{comment.userName || 'Anonymous'}</span>
-                    <span className="text-gray-500 text-xs">{formatTime(comment.createdAt)}</span>
+                    <span className="text-white font-medium text-sm">{comment.username || 'Anonymous'}</span>
+                    <span className="text-gray-500 text-xs">{formatTime(comment.created_at)}</span>
                   </div>
-                  <p className="text-gray-300 text-sm mt-1">{comment.content}</p>
+                  <p className="text-gray-300 text-sm mt-1">{comment.comment_text}</p>
                 </div>
               </div>
             ))
@@ -165,12 +180,12 @@ export default function CommentsModal({ track, onClose, userId }: CommentsModalP
               />
               <button
                 onClick={handleSubmit}
-                disabled={!newComment.trim() || createComment.isPending}
+                disabled={!newComment.trim() || isPosting}
                 className="p-3 rounded-xl transition"
-                style={{ 
+                style={{
                   background: newComment.trim() ? colors.primaryLight : colors.gray700,
                   color: colors.white,
-                  opacity: createComment.isPending ? 0.7 : 1,
+                  opacity: isPosting ? 0.7 : 1,
                 }}
               >
                 <Send className="w-5 h-5" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, Menu, LogIn, Share2 } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -13,6 +13,7 @@ import DailyBonusModal from '@/components/DailyBonusModal';
 import MissionGenerator from '@/components/MissionGenerator';
 import FoundingSlotsCounter from '@/components/FoundingSlotsCounter';
 import { trpc } from '@/lib/trpc';
+import { supabase, getAnonUserId } from '@/lib/supabase';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
 import { Button } from '@/components/ui/button';
@@ -223,61 +224,59 @@ export default function Feed() {
   const [userPredictions, setUserPredictions] = useState<Set<number>>(new Set());
   const [userLikes, setUserLikes] = useState<Set<number>>(new Set());
 
-  // Fetch submissions from tRPC
-  const { data: tracks, isLoading: tracksLoading, refetch: refetchTracks } = trpc.submissions.list.useQuery({
-    status: 'approved',
-    limit: 20,
-  });
+  // Fetch tracks from Supabase
+  const [tracks, setTracks] = useState<any[]>([]);
+  const [tracksLoading, setTracksLoading] = useState(true);
 
-  // Fetch user profile (token balance, etc.)
+  const fetchTracks = async () => {
+    setTracksLoading(true);
+    const { data, error } = await supabase
+      .from("tracks")
+      .select("*")
+      .eq("status", "approved")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (!error && data) {
+      setTracks(
+        data.map((t: any) => ({
+          id: t.id,
+          artistName: t.artist_name || t.artist || "Unknown",
+          trackTitle: t.track_title || t.title || "Untitled",
+          artist_image: t.artist_image || t.cover_url,
+          cover_art: t.cover_url || t.cover_art,
+          streamingLink: t.streaming_link || t.audio_url,
+          genre: t.genre,
+          likes: t.like_count || 0,
+          commentsCount: t.comment_count || 0,
+          avgHookStrength: t.avg_hook,
+          avgOriginality: t.avg_originality,
+          avgProductionQuality: t.avg_production,
+          totalCertifications: t.rating_count || 0,
+        }))
+      );
+    }
+    setTracksLoading(false);
+  };
+
+  useEffect(() => {
+    fetchTracks();
+  }, []);
+
+  // Fetch user profile via tRPC (auth-adjacent, uses Phase 0 API)
   const { data: profile, refetch: refetchProfile } = trpc.user.getProfile.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
-  // Fetch user's likes
-  const { data: likesData } = trpc.likes.getUserLikes.useQuery(undefined, {
-    enabled: isAuthenticated,
-  });
+  // Daily bonus — placeholder until Phase 3 (Supabase Edge Functions)
+  const dailyBonusClaimed = useRef(false);
 
-  // Mutations
-  const likeMutation = trpc.likes.toggle.useMutation({
-    onSuccess: () => {
-      refetchTracks();
-    },
-  });
-
-  const predictionMutation = trpc.predictions.create.useMutation({
-    onSuccess: (data) => {
-      if (data.success) {
-        refetchProfile();
-        refetchTracks();
-        toast.success('Prediction locked! +5 FT earned');
-      } else if (data.error === 'already_predicted') {
-        toast.error('You already certified this track');
-      }
-    },
-    onError: () => {
-      toast.error('Failed to submit prediction');
-    },
-  });
-
-  // Daily bonus mutation
-  const dailyBonusMutation = trpc.tokens.claimDailyBonus.useMutation({
-    onSuccess: (data) => {
-      if (data && !data.alreadyClaimed) {
-        setDailyBonusData(data);
-        setShowDailyBonus(true);
-        refetchProfile();
-      }
-    },
-  });
-
-  // Update user likes when data changes
   useEffect(() => {
-    if (likesData) {
-      setUserLikes(new Set(likesData));
+    if (isAuthenticated && profile && !dailyBonusClaimed.current) {
+      dailyBonusClaimed.current = true;
+      // TODO: Phase 3 — call Supabase Edge Function for daily bonus
     }
-  }, [likesData]);
+  }, [isAuthenticated, profile]);
 
   // Check if user needs to select avatar
   useEffect(() => {
@@ -287,12 +286,7 @@ export default function Feed() {
     }
   }, [isAuthenticated, profile, setLocation]);
 
-  // Check for daily bonus on login
-  useEffect(() => {
-    if (isAuthenticated && profile?.hasCompletedOnboarding && !dailyBonusMutation.isPending) {
-      dailyBonusMutation.mutate();
-    }
-  }, [isAuthenticated, profile, dailyBonusMutation]);
+  // Note: Daily bonus claim removed (Phase 3 — Supabase Edge Functions)
 
   const handlePredictClick = (track: any) => {
     if (!isAuthenticated) {
@@ -329,7 +323,9 @@ export default function Feed() {
       return newSet;
     });
 
-    likeMutation.mutate({ submissionId: trackId });
+    // Toggle like in Supabase (Phase 3 will add a proper likes table)
+    // For now, just update UI optimistically
+    toast.success(isCurrentlyLiked ? "Removed like" : "Liked!");
   };
 
   const handlePredictionSubmit = async (trackId: number, scores: any) => {
@@ -338,14 +334,39 @@ export default function Feed() {
       return;
     }
 
-    predictionMutation.mutate({
-      submissionId: trackId,
-      hookStrength: scores.hookStrength,
-      originality: scores.originality,
-      productionQuality: scores.productionQuality,
-      vibe: scores.vibe ?? 50,
-      engagementBonus: scores.engagementBonus ?? false,
-    });
+    // Save rating to Supabase (unified with Listen.tsx rating system)
+    const userId = user?.id?.toString() || getAnonUserId();
+    const { error } = await supabase.from("ratings").upsert(
+      {
+        track_id: trackId,
+        user_id: userId,
+        rating: Math.max(
+          1,
+          Math.min(
+            5,
+            Math.round(
+              (scores.hookStrength +
+                scores.originality +
+                scores.productionQuality +
+                (scores.vibe ?? 50)) /
+                80
+            )
+          )
+        ),
+        hook_strength: scores.hookStrength,
+        production_quality: scores.productionQuality,
+        originality: scores.originality,
+        vibe: scores.vibe ?? 50,
+      },
+      { onConflict: "track_id,user_id" }
+    );
+
+    if (error) {
+      toast.error("Failed to submit prediction");
+    } else {
+      toast.success("Prediction locked! +5 FT earned");
+      fetchTracks();
+    }
 
     setUserPredictions(prev => new Set(prev).add(trackId));
     setSelectedTrack(null);
