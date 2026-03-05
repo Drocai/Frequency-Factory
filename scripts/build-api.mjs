@@ -28,6 +28,7 @@ const tsconfigPathsPlugin = {
 const functions = [
   "api/trpc/[trpc].ts",
   "api/oauth/callback.ts",
+  "api/stripe/webhook.ts",
 ];
 
 for (const entry of functions) {
@@ -39,7 +40,7 @@ for (const entry of functions) {
     platform: "node",
     format: "esm",
     outfile: tmp,
-    external: ["@vercel/node"],
+    external: ["@vercel/node", "@supabase/supabase-js", "stripe"],
     banner: {
       js: "import{createRequire as ___cr}from'module';const require=___cr(import.meta.url);",
     },

@@ -297,25 +297,24 @@ export default function Feed() {
     enabled: isAuthenticated,
   });
 
-  // Daily bonus — placeholder until Phase 3 (Supabase Edge Functions)
+  // Daily bonus — claim once per session on Feed mount
   const dailyBonusClaimed = useRef(false);
+  const claimDailyBonus = trpc.tokens.claimDailyBonus.useMutation({
+    onSuccess: (data: any) => {
+      if (data && !data.alreadyClaimed) {
+        setDailyBonusData(data);
+        setShowDailyBonus(true);
+        refetchProfile();
+      }
+    },
+  });
 
   useEffect(() => {
     if (isAuthenticated && profile && !dailyBonusClaimed.current) {
       dailyBonusClaimed.current = true;
-      // TODO: Phase 3 — call Supabase Edge Function for daily bonus
+      claimDailyBonus.mutate();
     }
   }, [isAuthenticated, profile]);
-
-  // Check if user needs to select avatar
-  useEffect(() => {
-    if (isAuthenticated && profile && !profile.hasCompletedOnboarding) {
-      // Redirect to avatar selection
-      setLocation('/avatar');
-    }
-  }, [isAuthenticated, profile, setLocation]);
-
-  // Note: Daily bonus claim removed (Phase 3 — Supabase Edge Functions)
 
   const handlePredictClick = (track: any) => {
     if (!isAuthenticated) {

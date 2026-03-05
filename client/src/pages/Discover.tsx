@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Search, Filter, TrendingUp, Clock, Flame } from "lucide-react";
+import BottomNav from "@/components/BottomNav";
 
 interface Track {
   id: number;
@@ -236,43 +237,7 @@ export default function Discover() {
         )}
       </div>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 z-50">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-around py-3">
-            <Link href="/feed">
-              <Button variant="ghost" size="sm" className="flex-col h-auto py-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 mb-1" />
-                <span className="text-xs">Home</span>
-              </Button>
-            </Link>
-            <Link href="/discover">
-              <Button variant="ghost" size="sm" className="flex-col h-auto py-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-yellow-500 mb-1" />
-                <span className="text-xs text-orange-500">Discover</span>
-              </Button>
-            </Link>
-            <Link href="/submit">
-              <Button variant="ghost" size="sm" className="flex-col h-auto py-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 mb-1" />
-                <span className="text-xs">Submit</span>
-              </Button>
-            </Link>
-            <Link href="/rewards">
-              <Button variant="ghost" size="sm" className="flex-col h-auto py-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-teal-500 mb-1" />
-                <span className="text-xs">Rewards</span>
-              </Button>
-            </Link>
-            <Link href="/profile">
-              <Button variant="ghost" size="sm" className="flex-col h-auto py-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-600 to-gray-700 mb-1" />
-                <span className="text-xs">Profile</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <BottomNav activeTab="discover" />
     </div>
   );
 }

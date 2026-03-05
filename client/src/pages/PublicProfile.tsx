@@ -1,20 +1,17 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import BottomNav from "@/components/BottomNav";
-import { Link, useLocation } from "wouter";
+import { useRoute } from "wouter";
 import {
   Target,
-  Trophy,
   TrendingUp,
-  Award,
-  LogOut,
   Coins,
-  Flame,
   Crown,
-  Settings,
   Calendar,
+  Award,
+  Flame,
+  Trophy,
+  ArrowLeft,
 } from "lucide-react";
+import { Link } from "wouter";
 
 const BADGE_ICONS: Record<string, React.ElementType> = {
   crown: Crown,
@@ -27,31 +24,23 @@ const BADGE_ICONS: Record<string, React.ElementType> = {
   award: Award,
 };
 
-export default function Profile() {
-  const { user, loading, logout } = useAuth();
-  const [, navigate] = useLocation();
+export default function PublicProfile() {
+  const [, params] = useRoute("/u/:userId");
+  const userId = Number(params?.userId);
 
-  const profileQuery = trpc.user.getProfile.useQuery(undefined, {
-    enabled: !!user,
-  });
-  const badgesQuery = trpc.badges.myBadges.useQuery(undefined, {
-    enabled: !!user,
-  });
-  const tokenHistoryQuery = trpc.tokens.getHistory.useQuery(
-    { limit: 10 },
-    { enabled: !!user },
+  const profileQuery = trpc.user.getPublicProfile.useQuery(
+    { userId },
+    { enabled: !!userId && !isNaN(userId) },
+  );
+  const badgesQuery = trpc.badges.getUserBadges.useQuery(
+    { userId },
+    { enabled: !!userId && !isNaN(userId) },
   );
 
   const profile = profileQuery.data;
   const userBadges = badgesQuery.data ?? [];
-  const tokenHistory = tokenHistoryQuery.data ?? [];
 
-  async function handleLogout() {
-    await logout();
-    window.location.href = "/";
-  }
-
-  if (loading || profileQuery.isLoading) {
+  if (profileQuery.isLoading) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
@@ -79,21 +68,16 @@ export default function Profile() {
             className="font-primary text-2xl tracking-wider"
             style={{ color: "var(--ff-primary)" }}
           >
-            FREQUENCY FACTORY
+            USER NOT FOUND
           </h1>
-          <p
-            className="font-secondary text-sm"
-            style={{ color: "var(--ff-text-secondary)" }}
-          >
-            Sign in to view your profile
-          </p>
-          <Button
-            onClick={() => navigate("/login")}
-            className="font-primary tracking-wider text-black"
-            style={{ background: "var(--ff-gradient-primary)" }}
-          >
-            ENTER THE FACTORY
-          </Button>
+          <Link href="/feed">
+            <span
+              className="font-secondary text-sm underline"
+              style={{ color: "var(--ff-text-secondary)" }}
+            >
+              Back to Feed
+            </span>
+          </Link>
         </div>
       </div>
     );
@@ -113,9 +97,15 @@ export default function Profile() {
       })
     : "—";
 
+  let socials: Record<string, string> = {};
+  try {
+    socials = profile.socialLinks ? JSON.parse(profile.socialLinks) : {};
+  } catch {
+    /* ignore */
+  }
+
   return (
-    <div className="min-h-screen pb-24" style={{ background: "var(--ff-bg-primary)" }}>
-      {/* Header */}
+    <div className="min-h-screen" style={{ background: "var(--ff-bg-primary)" }}>
       <header
         className="sticky top-0 z-50 backdrop-blur-sm"
         style={{
@@ -123,38 +113,16 @@ export default function Profile() {
           borderBottom: "1px solid var(--ff-gray-800)",
         }}
       >
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-3 flex items-center gap-3">
+          <Link href="/feed">
+            <ArrowLeft className="w-5 h-5" style={{ color: "var(--ff-text-secondary)" }} />
+          </Link>
           <h1
             className="font-primary text-lg tracking-wider"
             style={{ color: "var(--ff-primary)" }}
           >
-            PROFILE
+            {profile.avatarName || profile.name || "PROFILE"}
           </h1>
-          <div className="flex items-center gap-3">
-            <Link href="/settings">
-              <button
-                className="p-2 rounded-lg transition-colors"
-                style={{ color: "var(--ff-text-secondary)" }}
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-            </Link>
-            <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-              style={{
-                background: "var(--ff-bg-tertiary)",
-                border: "1px solid var(--ff-gray-600)",
-              }}
-            >
-              <Coins className="w-4 h-4" style={{ color: "var(--ff-token-gold)" }} />
-              <span
-                className="font-primary text-sm"
-                style={{ color: "var(--ff-token-gold)" }}
-              >
-                {profile.tokenBalance} FT
-              </span>
-            </div>
-          </div>
         </div>
       </header>
 
@@ -183,7 +151,7 @@ export default function Profile() {
             </p>
           )}
           <div className="flex items-center justify-center gap-3 mt-2">
-            {profile.isFounder && (
+            {profile.isFounder === 1 && (
               <span
                 className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-primary"
                 style={{
@@ -206,8 +174,8 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3">
           <StatCard
             icon={<Target className="w-5 h-5" />}
             label="Predictions"
@@ -222,28 +190,21 @@ export default function Profile() {
           />
           <StatCard
             icon={<Coins className="w-5 h-5" />}
-            label="Total Earned"
+            label="Earned"
             value={`${profile.totalTokensEarned ?? 0} FT`}
             color="#FFD700"
-          />
-          <StatCard
-            icon={<Flame className="w-5 h-5" />}
-            label="Streak"
-            value={`${profile.loginStreak ?? 0}d`}
-            color="#FF4500"
           />
         </div>
 
         {/* Badges */}
-        <Section title="Badges">
-          {userBadges.length === 0 ? (
-            <p
-              className="font-secondary text-sm text-center py-4"
+        {userBadges.length > 0 && (
+          <div>
+            <h3
+              className="font-primary text-sm tracking-wider mb-3"
               style={{ color: "var(--ff-text-secondary)" }}
             >
-              No badges yet — keep predicting!
-            </p>
-          ) : (
+              Badges
+            </h3>
             <div className="grid grid-cols-3 gap-3">
               {userBadges.map((b) => {
                 const Icon = BADGE_ICONS[b.icon ?? "award"] ?? Award;
@@ -264,71 +225,39 @@ export default function Profile() {
                 );
               })}
             </div>
-          )}
-        </Section>
+          </div>
+        )}
 
-        {/* Token History */}
-        <Section title="Recent Activity">
-          {tokenHistory.length === 0 ? (
-            <p
-              className="font-secondary text-sm text-center py-4"
+        {/* Social Links */}
+        {Object.entries(socials).some(([, v]) => v) && (
+          <div>
+            <h3
+              className="font-primary text-sm tracking-wider mb-3"
               style={{ color: "var(--ff-text-secondary)" }}
             >
-              No token activity yet
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {tokenHistory.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg"
-                  style={{
-                    background: "var(--ff-bg-tertiary)",
-                    border: "1px solid var(--ff-gray-800)",
-                  }}
-                >
-                  <div>
-                    <p className="font-secondary text-sm text-white">
-                      {tx.description || tx.type.replace(/_/g, " ")}
-                    </p>
-                    <p
-                      className="font-secondary text-[10px]"
-                      style={{ color: "var(--ff-text-secondary)" }}
+              Socials
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(socials).map(
+                ([platform, handle]) =>
+                  handle && (
+                    <span
+                      key={platform}
+                      className="px-3 py-1 rounded-full font-secondary text-xs"
+                      style={{
+                        background: "var(--ff-bg-tertiary)",
+                        border: "1px solid var(--ff-gray-700)",
+                        color: "var(--ff-text-secondary)",
+                      }}
                     >
-                      {new Date(tx.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <span
-                    className="font-primary text-sm"
-                    style={{
-                      color: tx.amount > 0 ? "var(--ff-token-gold)" : "#FF4500",
-                    }}
-                  >
-                    {tx.amount > 0 ? "+" : ""}
-                    {tx.amount} FT
-                  </span>
-                </div>
-              ))}
+                      {platform}: {handle}
+                    </span>
+                  ),
+              )}
             </div>
-          )}
-        </Section>
-
-        {/* Logout */}
-        <Button
-          onClick={handleLogout}
-          variant="outline"
-          className="w-full font-primary tracking-wider"
-          style={{
-            borderColor: "rgba(255, 69, 0, 0.3)",
-            color: "#FF4500",
-          }}
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          LOGOUT
-        </Button>
+          </div>
+        )}
       </div>
-
-      <BottomNav activeTab="profile" />
     </div>
   );
 }
@@ -346,42 +275,22 @@ function StatCard({
 }) {
   return (
     <div
-      className="p-4 rounded-xl text-center"
+      className="p-3 rounded-xl text-center"
       style={{
         background: "var(--ff-bg-tertiary)",
         border: "1px solid var(--ff-gray-700)",
       }}
     >
-      <div className="flex justify-center mb-2" style={{ color }}>
+      <div className="flex justify-center mb-1" style={{ color }}>
         {icon}
       </div>
-      <div className="font-primary text-xl text-white">{value}</div>
+      <div className="font-primary text-lg text-white">{value}</div>
       <div
-        className="font-secondary text-xs mt-0.5"
+        className="font-secondary text-[10px]"
         style={{ color: "var(--ff-text-secondary)" }}
       >
         {label}
       </div>
-    </div>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <h3
-        className="font-primary text-sm tracking-wider mb-3"
-        style={{ color: "var(--ff-text-secondary)" }}
-      >
-        {title}
-      </h3>
-      {children}
     </div>
   );
 }

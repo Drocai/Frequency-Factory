@@ -10,7 +10,7 @@ export const users = mysqlTable("users", {
    * Use this for relations between tables.
    */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
+  /** Unique auth identifier. Stores Supabase Auth user UUID. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -26,6 +26,8 @@ export const users = mysqlTable("users", {
   avatarName: varchar("avatarName", { length: 64 }).default("BeatMaster"),
   /** Whether user has completed onboarding */
   hasCompletedOnboarding: int("hasCompletedOnboarding").default(0),
+  /** User type selected during onboarding */
+  userType: mysqlEnum("userType", ["listener", "artist", "both"]).default("listener"),
   /** Total tokens earned all time */
   totalTokensEarned: int("totalTokensEarned").default(50),
   /** Total predictions made */
@@ -37,6 +39,16 @@ export const users = mysqlTable("users", {
   isFounder: int("isFounder").default(0),
   /** Founder slot number (1-100) */
   founderSlot: int("founderSlot"),
+
+  /** Short bio / tagline */
+  bio: text("bio"),
+  /** JSON-encoded social links { twitter, instagram, spotify, soundcloud } */
+  socialLinks: text("socialLinks"),
+
+  /** Stripe customer ID for payments */
+  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  /** Subscription plan */
+  subscriptionPlan: mysqlEnum("subscriptionPlan", ["free", "pro"]).default("free"),
 
   /** Last date user claimed daily bonus (YYYY-MM-DD format) */
   lastDailyBonusDate: varchar("lastDailyBonusDate", { length: 10 }),
@@ -117,7 +129,12 @@ export const submissions = mysqlTable("submissions", {
   avgProductionQuality: int("avgProductionQuality").default(0),
   avgVibe: int("avgVibe").default(0),
   totalCertifications: int("totalCertifications").default(0),
-  
+
+  // Promotion fields
+  isFeatured: int("isFeatured").default(0),
+  featuredUntil: timestamp("featuredUntil"),
+  isPriorityReview: int("isPriorityReview").default(0),
+
   submittedAt: timestamp("submittedAt").defaultNow().notNull(),
   processedAt: timestamp("processedAt"),
 });
@@ -209,3 +226,84 @@ export const notifications = mysqlTable("notifications", {
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
+
+/**
+ * Badges — achievement definitions
+ */
+export const badges = mysqlTable("badges", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 64 }).notNull().unique(),
+  name: varchar("name", { length: 128 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 32 }).default("general"),
+  icon: varchar("icon", { length: 64 }).default("award"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Badge = typeof badges.$inferSelect;
+export type InsertBadge = typeof badges.$inferInsert;
+
+/**
+ * User badges — awarded achievements
+ */
+export const userBadges = mysqlTable("userBadges", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  badgeId: int("badgeId").notNull(),
+  awardedAt: timestamp("awardedAt").defaultNow().notNull(),
+})
+
+export type UserBadge = typeof userBadges.$inferSelect;
+export type InsertUserBadge = typeof userBadges.$inferInsert;
+
+/**
+ * Payments table for Stripe transactions
+ */
+export const payments = mysqlTable("payments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 128 }),
+  stripeSessionId: varchar("stripeSessionId", { length: 128 }),
+  type: mysqlEnum("type", ["token_pack", "promotion", "subscription", "merch"]).notNull(),
+  amount: int("amount").notNull(),
+  status: mysqlEnum("paymentStatus", ["pending", "completed", "failed", "refunded"]).default("pending"),
+  metadata: text("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = typeof payments.$inferInsert;
+
+/**
+ * Subscriptions table for FF Pro
+ */
+export const subscriptions = mysqlTable("subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
+  plan: mysqlEnum("plan", ["free", "pro"]).default("free"),
+  status: mysqlEnum("subStatus", ["active", "canceled", "past_due", "trialing"]).default("active"),
+  currentPeriodStart: timestamp("currentPeriodStart"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+/**
+ * Token tips between users
+ */
+export const tokenTips = mysqlTable("tokenTips", {
+  id: int("id").autoincrement().primaryKey(),
+  fromUserId: int("fromUserId").notNull(),
+  toUserId: int("toUserId").notNull(),
+  submissionId: int("submissionId"),
+  amount: int("amount").notNull(),
+  message: text("message"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TokenTip = typeof tokenTips.$inferSelect;
+export type InsertTokenTip = typeof tokenTips.$inferInsert;

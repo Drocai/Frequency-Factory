@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { supabase, GENRES } from '@/lib/supabase';
+import { useAuth } from '@/_core/hooks/useAuth';
 import { toast } from 'sonner';
 import {
   Upload, Music, Image, X, Plus, ChevronDown, Loader2, CheckCircle, Zap, Shield, ArrowRight,
@@ -397,7 +398,15 @@ function CertifiedBadgePreview() {
 
 export default function Landing() {
   const [, setLocation] = useLocation();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [drafts, setDrafts] = useState<TrackDraft[]>([emptyDraft()]);
+
+  // Redirect authenticated users to /feed
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      setLocation('/feed');
+    }
+  }, [authLoading, isAuthenticated, setLocation]);
   const [submitting, setSubmitting] = useState(false);
   const [recentSubmissions, setRecentSubmissions] = useState<
     { artistName: string; genre: string; timestamp: string }[]

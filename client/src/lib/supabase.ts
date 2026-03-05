@@ -5,6 +5,15 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJ
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Sync Supabase auth token to cookie so the server can verify it.
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session?.access_token) {
+    document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+  } else {
+    document.cookie = "sb-access-token=; path=/; max-age=0";
+  }
+});
+
 // ---------- Types matching live Supabase schema ----------
 
 export type Track = {

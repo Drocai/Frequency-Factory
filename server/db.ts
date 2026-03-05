@@ -8,7 +8,12 @@ import {
   predictions, InsertPrediction,
   comments, InsertComment,
   likes,
-  notifications, InsertNotification
+  notifications, InsertNotification,
+  badges, InsertBadge,
+  userBadges,
+  payments, InsertPayment,
+  subscriptions,
+  tokenTips,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -131,6 +136,9 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+/** Alias for getUserByOpenId — used by Supabase auth flow for clarity. */
+export const getUserBySupabaseId = getUserByOpenId;
+
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
@@ -144,7 +152,19 @@ export async function updateUserAvatar(userId: number, avatarId: number, avatarN
   if (!db) return;
 
   await db.update(users)
-    .set({ avatarId, avatarName, hasCompletedOnboarding: 1 })
+    .set({ avatarId, avatarName })
+    .where(eq(users.id, userId));
+}
+
+export async function completeOnboarding(userId: number, userType?: "listener" | "artist" | "both") {
+  const db = await getDb();
+  if (!db) return;
+
+  const updates: Record<string, unknown> = { hasCompletedOnboarding: 1 };
+  if (userType) updates.userType = userType;
+
+  await db.update(users)
+    .set(updates)
     .where(eq(users.id, userId));
 }
 
@@ -344,6 +364,18 @@ export async function getSubmissions(status?: string, limit = 50) {
     .from(submissions)
     .orderBy(desc(submissions.submittedAt))
     .limit(limit);
+
+  return result;
+}
+
+export async function getUserSubmissions(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select()
+    .from(submissions)
+    .where(eq(submissions.userId, userId))
+    .orderBy(desc(submissions.submittedAt));
 
   return result;
 }
@@ -1142,4 +1174,317 @@ export async function clearAudioReports(sessionId: string) {
     .eq("id", sessionId);
 
   return { success: true };
+}
+
+// ============================================
+// PROFILE FUNCTIONS
+// ============================================
+
+export async function updateUserProfile(
+  userId: number,
+  data: { name?: string; bio?: string; socialLinks?: string },
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const updates: Record<string, unknown> = {};
+  if (data.name !== undefined) updates.name = data.name;
+  if (data.bio !== undefined) updates.bio = data.bio;
+  if (data.socialLinks !== undefined) updates.socialLinks = data.socialLinks;
+
+  if (Object.keys(updates).length > 0) {
+    await db.update(users).set(updates).where(eq(users.id, userId));
+  }
+}
+
+export async function getPublicProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      avatarId: users.avatarId,
+      avatarName: users.avatarName,
+      bio: users.bio,
+      socialLinks: users.socialLinks,
+      totalPredictions: users.totalPredictions,
+      accuratePredictions: users.accuratePredictions,
+      totalTokensEarned: users.totalTokensEarned,
+      isFounder: users.isFounder,
+      founderSlot: users.founderSlot,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+// ============================================
+// BADGE FUNCTIONS
+// ============================================
+
+export async function getAllBadges() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(badges);
+}
+
+export async function getUserBadges(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select({
+      id: userBadges.id,
+      badgeId: userBadges.badgeId,
+      slug: badges.slug,
+      name: badges.name,
+      description: badges.description,
+      category: badges.category,
+      icon: badges.icon,
+      awardedAt: userBadges.awardedAt,
+    })
+    .from(userBadges)
+    .innerJoin(badges, eq(userBadges.badgeId, badges.id))
+    .where(eq(userBadges.userId, userId));
+}
+
+export async function awardBadge(userId: number, badgeSlug: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const badgeResult = await db
+    .select()
+    .from(badges)
+    .where(eq(badges.slug, badgeSlug))
+    .limit(1);
+  if (badgeResult.length === 0) return null;
+
+  const badge = badgeResult[0];
+
+  const existing = await db
+    .select()
+    .from(userBadges)
+    .where(and(eq(userBadges.userId, userId), eq(userBadges.badgeId, badge.id)))
+    .limit(1);
+  if (existing.length > 0) return null;
+
+  await db.insert(userBadges).values({ userId, badgeId: badge.id });
+  return badge;
+}
+
+export async function checkAndAwardBadges(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const user = await getUserById(userId);
+  if (!user) return [];
+
+  const awarded: string[] = [];
+
+  if (user.isFounder === 1) {
+    const result = await awardBadge(userId, "founder");
+    if (result) awarded.push("founder");
+  }
+
+  if (user.loginStreak && user.loginStreak >= 7) {
+    const result = await awardBadge(userId, "streak-7");
+    if (result) awarded.push("streak-7");
+  }
+  if (user.loginStreak && user.loginStreak >= 30) {
+    const result = await awardBadge(userId, "streak-30");
+    if (result) awarded.push("streak-30");
+  }
+
+  if (user.totalPredictions && user.totalPredictions >= 100) {
+    const result = await awardBadge(userId, "predictions-100");
+    if (result) awarded.push("predictions-100");
+  }
+
+  if (
+    user.totalPredictions &&
+    user.totalPredictions >= 10 &&
+    user.accuratePredictions
+  ) {
+    const accuracy = user.accuratePredictions / user.totalPredictions;
+    if (accuracy >= 0.8) {
+      const result = await awardBadge(userId, "gold-accuracy");
+      if (result) awarded.push("gold-accuracy");
+    }
+  }
+
+  return awarded;
+}
+
+export async function seedBadges() {
+  const db = await getDb();
+  if (!db) return;
+
+  const defaultBadges: InsertBadge[] = [
+    { slug: "founder", name: "Founding Artist", description: "One of the first 100 Factory members", category: "exclusive", icon: "crown" },
+    { slug: "streak-7", name: "7-Day Streak", description: "Logged in 7 consecutive days", category: "streak", icon: "flame" },
+    { slug: "streak-30", name: "30-Day Streak", description: "Logged in 30 consecutive days", category: "streak", icon: "fire" },
+    { slug: "predictions-100", name: "Century Club", description: "Made 100 predictions", category: "milestone", icon: "target" },
+    { slug: "gold-accuracy", name: "Gold Accuracy", description: "80%+ prediction accuracy (10+ predictions)", category: "skill", icon: "trophy" },
+    { slug: "first-submission", name: "First Submission", description: "Submitted your first track", category: "milestone", icon: "music" },
+    { slug: "early-adopter", name: "Early Adopter", description: "Joined during beta", category: "exclusive", icon: "sparkles" },
+  ];
+
+  for (const badge of defaultBadges) {
+    const existing = await db.select().from(badges).where(eq(badges.slug, badge.slug)).limit(1);
+    if (existing.length === 0) {
+      await db.insert(badges).values(badge);
+    }
+  }
+}
+
+// ============================================
+// PAYMENTS & SUBSCRIPTIONS
+// ============================================
+
+export async function recordPayment(data: InsertPayment) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(payments).values(data);
+  return { id: Number(result[0].insertId) };
+}
+
+export async function updatePaymentStatus(
+  stripeSessionId: string,
+  status: "completed" | "failed" | "refunded",
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(payments)
+    .set({ status })
+    .where(eq(payments.stripeSessionId, stripeSessionId));
+}
+
+export async function getPaymentBySessionId(sessionId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.stripeSessionId, sessionId))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getUserByStripeCustomerId(customerId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(users).where(eq(users.stripeCustomerId, customerId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function setUserStripeCustomerId(userId: number, customerId: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.id, userId));
+}
+
+export async function updateSubscriptionPlan(userId: number, plan: "free" | "pro") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ subscriptionPlan: plan }).where(eq(users.id, userId));
+}
+
+export async function upsertSubscription(data: {
+  userId: number;
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  plan: "free" | "pro";
+  status: "active" | "canceled" | "past_due" | "trialing";
+  currentPeriodStart?: Date;
+  currentPeriodEnd?: Date;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  const existing = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, data.userId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    await db
+      .update(subscriptions)
+      .set({
+        stripeSubscriptionId: data.stripeSubscriptionId,
+        plan: data.plan,
+        status: data.status,
+        currentPeriodStart: data.currentPeriodStart,
+        currentPeriodEnd: data.currentPeriodEnd,
+      })
+      .where(eq(subscriptions.userId, data.userId));
+  } else {
+    await db.insert(subscriptions).values(data);
+  }
+}
+
+export async function getUserSubscription(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// ============================================
+// TOKEN TIPS
+// ============================================
+
+export async function sendTokenTip(
+  fromUserId: number,
+  toUserId: number,
+  amount: number,
+  submissionId?: number,
+  message?: string,
+) {
+  const spendResult = await spendTokens(fromUserId, amount, "skip_queue", `Tipped ${amount} FT`);
+  if (spendResult && "error" in spendResult) {
+    return { success: false, error: spendResult.error };
+  }
+
+  await awardTokens(toUserId, amount, "referral", `Received ${amount} FT tip`);
+
+  const db = await getDb();
+  if (db) {
+    await db.insert(tokenTips).values({ fromUserId, toUserId, amount, submissionId, message });
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// PROMOTION HELPERS
+// ============================================
+
+export async function setSubmissionFeatured(submissionId: number, hours: number) {
+  const db = await getDb();
+  if (!db) return;
+  const until = new Date(Date.now() + hours * 60 * 60 * 1000);
+  await db
+    .update(submissions)
+    .set({ isFeatured: 1, featuredUntil: until })
+    .where(eq(submissions.id, submissionId));
+}
+
+export async function setSubmissionPriorityReview(submissionId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(submissions)
+    .set({ isPriorityReview: 1 })
+    .where(eq(submissions.id, submissionId));
 }
