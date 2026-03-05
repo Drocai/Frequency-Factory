@@ -139,21 +139,23 @@ export default function Profile() {
                 <Settings className="w-5 h-5" />
               </button>
             </Link>
-            <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-              style={{
-                background: "var(--ff-bg-tertiary)",
-                border: "1px solid var(--ff-gray-600)",
-              }}
-            >
-              <Coins className="w-4 h-4" style={{ color: "var(--ff-token-gold)" }} />
-              <span
-                className="font-primary text-sm"
-                style={{ color: "var(--ff-token-gold)" }}
+            <Link href="/shop">
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+                style={{
+                  background: "var(--ff-bg-tertiary)",
+                  border: "1px solid var(--ff-gray-600)",
+                }}
               >
-                {profile.tokenBalance} FT
-              </span>
-            </div>
+                <Coins className="w-4 h-4" style={{ color: "var(--ff-token-gold)" }} />
+                <span
+                  className="font-primary text-sm"
+                  style={{ color: "var(--ff-token-gold)" }}
+                >
+                  {profile.tokenBalance} FT
+                </span>
+              </div>
+            </Link>
           </div>
         </div>
       </header>
@@ -232,6 +234,50 @@ export default function Profile() {
             value={`${profile.loginStreak ?? 0}d`}
             color="#FF4500"
           />
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/shop">
+            <div
+              className="p-4 rounded-xl text-center cursor-pointer hover:opacity-90 transition-opacity"
+              style={{
+                background: "var(--ff-bg-tertiary)",
+                border: "1px solid var(--ff-gray-700)",
+              }}
+            >
+              <div className="flex justify-center mb-2" style={{ color: "#FFD700" }}>
+                <Coins className="w-5 h-5" />
+              </div>
+              <div className="font-primary text-sm text-white">Get Tokens</div>
+              <div
+                className="font-secondary text-xs mt-0.5"
+                style={{ color: "var(--ff-text-secondary)" }}
+              >
+                Visit Token Shop
+              </div>
+            </div>
+          </Link>
+          <Link href="/pro">
+            <div
+              className="p-4 rounded-xl text-center cursor-pointer hover:opacity-90 transition-opacity"
+              style={{
+                background: "var(--ff-bg-tertiary)",
+                border: "1px solid var(--ff-gray-700)",
+              }}
+            >
+              <div className="flex justify-center mb-2" style={{ color: "#9B30FF" }}>
+                <Crown className="w-5 h-5" />
+              </div>
+              <div className="font-primary text-sm text-white">Go Pro</div>
+              <div
+                className="font-secondary text-xs mt-0.5"
+                style={{ color: "var(--ff-text-secondary)" }}
+              >
+                Unlimited Predictions
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Badges */}

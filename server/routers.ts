@@ -250,6 +250,16 @@ export const predictionsRouter = router({
       engagementBonus: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Check daily prediction limit for free users
+      const dailyStatus = await db.getDailyPredictionCount(ctx.user.id);
+      if (!dailyStatus.isPro && dailyStatus.remaining <= 0) {
+        return {
+          success: false,
+          error: "prediction_limit_reached",
+          message: "You've used all 10 daily predictions. Upgrade to Pro for unlimited!",
+        };
+      }
+
       const existing = await db.getUserPredictionForSubmission(ctx.user.id, input.submissionId);
       if (existing) {
         return { success: false, error: 'already_predicted' };
@@ -272,6 +282,9 @@ export const predictionsRouter = router({
       });
 
       if (result) {
+        // Increment daily prediction counter
+        await db.incrementDailyPredictions(ctx.user.id);
+
         let totalAward = 5;
         let description = 'Certified a track';
 
@@ -298,6 +311,10 @@ export const predictionsRouter = router({
       const prediction = await db.getUserPredictionForSubmission(ctx.user.id, input.submissionId);
       return { hasPredicted: !!prediction, prediction };
     }),
+
+  dailyStatus: protectedProcedure.query(async ({ ctx }) => {
+    return db.getDailyPredictionCount(ctx.user.id);
+  }),
 });
 
 export const commentsRouter = router({
@@ -671,6 +688,28 @@ export const stripeRouter = router({
       currentPeriodEnd: sub?.currentPeriodEnd || null,
     };
   }),
+
+  createPortalSession: protectedProcedure.mutation(async ({ ctx }) => {
+    const stripe = getStripe();
+    if (!stripe) return { error: "Stripe not configured" };
+
+    const user = await db.getUserById(ctx.user.id);
+    if (!user?.stripeCustomerId) return { error: "No billing account found" };
+
+    const baseUrl = ctx.req.headers.origin || "https://frequency-factory.vercel.app";
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: `${baseUrl}/settings`,
+    });
+
+    return { url: session.url };
+  }),
+
+  getPaymentHistory: protectedProcedure
+    .input(z.object({ limit: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      return db.getPaymentHistory(ctx.user.id, input?.limit);
+    }),
 });
 
 export const tipsRouter = router({
@@ -684,6 +723,12 @@ export const tipsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.id === input.toUserId) return { error: "Cannot tip yourself" };
       return db.sendTokenTip(ctx.user.id, input.toUserId, input.amount, input.submissionId, input.message);
+    }),
+
+  forSubmission: publicProcedure
+    .input(z.object({ submissionId: z.number() }))
+    .query(async ({ input }) => {
+      return db.getTipsForSubmission(input.submissionId);
     }),
 });
 

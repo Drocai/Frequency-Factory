@@ -351,18 +351,20 @@ export async function getSubmissions(status?: string, limit = 50) {
   const db = await getDb();
   if (!db) return [];
 
+  const featuredFirst = sql`CASE WHEN ${submissions.isFeatured} = 1 AND ${submissions.featuredUntil} > NOW() THEN 0 ELSE 1 END`;
+
   if (status) {
     const result = await db.select()
       .from(submissions)
       .where(eq(submissions.status, status as any))
-      .orderBy(desc(submissions.submittedAt))
+      .orderBy(featuredFirst, desc(submissions.submittedAt))
       .limit(limit);
     return result;
   }
 
   const result = await db.select()
     .from(submissions)
-    .orderBy(desc(submissions.submittedAt))
+    .orderBy(featuredFirst, desc(submissions.submittedAt))
     .limit(limit);
 
   return result;
@@ -1451,12 +1453,12 @@ export async function sendTokenTip(
   submissionId?: number,
   message?: string,
 ) {
-  const spendResult = await spendTokens(fromUserId, amount, "skip_queue", `Tipped ${amount} FT`);
+  const spendResult = await spendTokens(fromUserId, amount, "tip_sent", `Tipped ${amount} FT`);
   if (spendResult && "error" in spendResult) {
     return { success: false, error: spendResult.error };
   }
 
-  await awardTokens(toUserId, amount, "referral", `Received ${amount} FT tip`);
+  await awardTokens(toUserId, amount, "tip_received", `Received ${amount} FT tip`);
 
   const db = await getDb();
   if (db) {
@@ -1464,6 +1466,96 @@ export async function sendTokenTip(
   }
 
   return { success: true };
+}
+
+// ============================================
+// DAILY PREDICTION LIMIT
+// ============================================
+
+const FREE_DAILY_PREDICTION_LIMIT = 10;
+
+export async function getDailyPredictionCount(userId: number) {
+  const db = await getDb();
+  if (!db) return { used: 0, limit: FREE_DAILY_PREDICTION_LIMIT, remaining: FREE_DAILY_PREDICTION_LIMIT, isPro: false };
+
+  const user = await getUserById(userId);
+  if (!user) return { used: 0, limit: FREE_DAILY_PREDICTION_LIMIT, remaining: FREE_DAILY_PREDICTION_LIMIT, isPro: false };
+
+  const isPro = user.subscriptionPlan === "pro";
+
+  // Reset counter if past reset time
+  if (user.dailyPredictionsResetAt && new Date(user.dailyPredictionsResetAt) <= new Date()) {
+    await db.update(users)
+      .set({ dailyPredictionsUsed: 0, dailyPredictionsResetAt: null })
+      .where(eq(users.id, userId));
+    return { used: 0, limit: isPro ? Infinity : FREE_DAILY_PREDICTION_LIMIT, remaining: isPro ? Infinity : FREE_DAILY_PREDICTION_LIMIT, isPro };
+  }
+
+  const used = user.dailyPredictionsUsed ?? 0;
+  const limit = isPro ? Infinity : FREE_DAILY_PREDICTION_LIMIT;
+  const remaining = isPro ? Infinity : Math.max(0, FREE_DAILY_PREDICTION_LIMIT - used);
+
+  return { used, limit, remaining, isPro };
+}
+
+export async function incrementDailyPredictions(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  const user = await getUserById(userId);
+  if (!user) return;
+
+  // Set reset time to start of next UTC day if not already set
+  let resetAt = user.dailyPredictionsResetAt;
+  if (!resetAt) {
+    const now = new Date();
+    resetAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  }
+
+  await db.update(users)
+    .set({
+      dailyPredictionsUsed: (user.dailyPredictionsUsed ?? 0) + 1,
+      dailyPredictionsResetAt: resetAt,
+    })
+    .where(eq(users.id, userId));
+}
+
+// ============================================
+// PAYMENT HISTORY
+// ============================================
+
+export async function getPaymentHistory(userId: number, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select()
+    .from(payments)
+    .where(eq(payments.userId, userId))
+    .orderBy(desc(payments.createdAt))
+    .limit(limit);
+
+  return result;
+}
+
+// ============================================
+// TIPS AGGREGATION
+// ============================================
+
+export async function getTipsForSubmission(submissionId: number) {
+  const db = await getDb();
+  if (!db) return { count: 0, total: 0 };
+
+  const result = await db.select({
+    count: sql<number>`COUNT(*)`,
+    total: sql<number>`COALESCE(SUM(${tokenTips.amount}), 0)`,
+  })
+    .from(tokenTips)
+    .where(eq(tokenTips.submissionId, submissionId));
+
+  return {
+    count: result[0]?.count ?? 0,
+    total: result[0]?.total ?? 0,
+  };
 }
 
 // ============================================

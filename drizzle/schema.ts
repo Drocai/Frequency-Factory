@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -54,7 +54,12 @@ export const users = mysqlTable("users", {
   lastDailyBonusDate: varchar("lastDailyBonusDate", { length: 10 }),
   /** Current login streak (consecutive days) */
   loginStreak: int("loginStreak").default(0),
-  
+
+  /** Daily predictions used (resets each UTC day) */
+  dailyPredictionsUsed: int("dailyPredictionsUsed").default(0),
+  /** When the daily prediction counter resets (start of next UTC day) */
+  dailyPredictionsResetAt: timestamp("dailyPredictionsResetAt"),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -85,6 +90,8 @@ export const tokenTransactions = mysqlTable("tokenTransactions", {
     "admin_deduct",      // Admin deducted tokens
     "stream_checkin",    // +2 FT for checking in to a live stream
     "stream_activity",   // +1 FT for sustained stream activity
+    "tip_sent",          // -N FT for sending a tip
+    "tip_received",      // +N FT for receiving a tip
   ]).notNull(),
   /** Optional reference to related entity (submission_id, comment_id, etc.) */
   referenceId: int("referenceId"),
@@ -307,3 +314,21 @@ export const tokenTips = mysqlTable("tokenTips", {
 
 export type TokenTip = typeof tokenTips.$inferSelect;
 export type InsertTokenTip = typeof tokenTips.$inferInsert;
+
+/**
+ * Streamer licenses for live streaming features
+ */
+export const streamerLicenses = mysqlTable("streamerLicenses", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
+  licenseKey: varchar("licenseKey", { length: 128 }).notNull().unique(),
+  plan: mysqlEnum("licensePlan", ["basic", "pro", "enterprise"]).default("basic"),
+  status: mysqlEnum("licenseStatus", ["active", "expired", "revoked"]).default("active"),
+  maxConcurrentViewers: int("maxConcurrentViewers").default(100),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StreamerLicense = typeof streamerLicenses.$inferSelect;
+export type InsertStreamerLicense = typeof streamerLicenses.$inferInsert;

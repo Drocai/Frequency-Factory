@@ -1,9 +1,10 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { APP_LOGO, getLoginUrl } from "@/const";
 import { useState } from "react";
-import { Link } from "wouter";
-import { Trophy, Crown, Medal, Gift, Star } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Trophy, Crown, Medal, Gift, Star, ShoppingBag } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 
@@ -26,8 +27,13 @@ interface Reward {
 
 export default function Rewards() {
   const { user, loading } = useAuth();
+  const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<"leaderboard" | "store">("leaderboard");
-  const userTokens = 50;
+
+  const profileQuery = trpc.user.getProfile.useQuery(undefined, {
+    enabled: !!user,
+  });
+  const userTokens = profileQuery.data?.tokenBalance ?? 0;
 
   const leaderboard: LeaderboardEntry[] = [
     { rank: 1, name: "FrequencyKing", tokens: 1250, accuracy: 92, predictions: 156 },
@@ -201,6 +207,27 @@ export default function Rewards() {
 
         {/* Token Store Tab */}
         {activeTab === "store" && (
+          <div className="space-y-4">
+            {/* Buy Tokens Banner */}
+            <div
+              className="flex items-center justify-between p-4 rounded-xl border border-orange-500/30"
+              style={{ background: "linear-gradient(135deg, rgba(255,69,0,0.1) 0%, rgba(255,107,53,0.05) 100%)" }}
+            >
+              <div className="flex items-center gap-3">
+                <ShoppingBag className="w-5 h-5 text-orange-400" />
+                <div>
+                  <p className="text-white text-sm font-bold">Need more tokens?</p>
+                  <p className="text-gray-400 text-xs">Purchase FT packs in the Token Shop</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => navigate("/shop")}
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 font-bold text-xs"
+              >
+                VISIT TOKEN SHOP
+              </Button>
+            </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {rewards.map((reward) => (
               <div
@@ -243,6 +270,7 @@ export default function Rewards() {
                 </div>
               </div>
             ))}
+          </div>
           </div>
         )}
       </div>

@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Crown, ExternalLink } from "lucide-react";
 
 const avatars = [
   { id: 1, name: "BeatMaster", color: "#1E90FF" },
@@ -28,6 +28,21 @@ export default function Settings() {
 
   const profileQuery = trpc.user.getProfile.useQuery(undefined, {
     enabled: !!user,
+  });
+
+  const subscriptionQuery = trpc.stripe.getSubscription.useQuery(undefined, {
+    enabled: !!user,
+  });
+
+  const createPortalSession = trpc.stripe.createPortalSession.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      } else if (data?.error) {
+        toast.error(data.error);
+      }
+    },
+    onError: () => toast.error("Failed to open billing portal"),
   });
 
   const updateProfile = trpc.user.updateProfile.useMutation({
@@ -228,6 +243,62 @@ export default function Settings() {
             }}
           >
             {profile?.email || "No email"}
+          </div>
+        </FieldGroup>
+
+        {/* Subscription */}
+        <FieldGroup label="Subscription">
+          <div
+            className="px-4 py-3 rounded-lg"
+            style={{
+              background: "var(--ff-bg-tertiary)",
+              border: `1px solid ${subscriptionQuery.data?.plan === "pro" ? "rgba(155, 48, 255, 0.4)" : "var(--ff-gray-700)"}`,
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Crown
+                  className="w-5 h-5"
+                  style={{ color: subscriptionQuery.data?.plan === "pro" ? "#9B30FF" : "var(--ff-text-secondary)" }}
+                />
+                <div>
+                  <span className="font-primary text-sm text-white">
+                    {subscriptionQuery.data?.plan === "pro" ? "FF Pro" : "Free Plan"}
+                  </span>
+                  {subscriptionQuery.data?.plan === "pro" && subscriptionQuery.data?.currentPeriodEnd && (
+                    <p
+                      className="font-secondary text-[10px]"
+                      style={{ color: "var(--ff-text-secondary)" }}
+                    >
+                      Renews {new Date(subscriptionQuery.data.currentPeriodEnd).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {subscriptionQuery.data?.plan === "pro" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => createPortalSession.mutate()}
+                  disabled={createPortalSession.isPending}
+                  className="font-primary text-xs tracking-wider"
+                  style={{ borderColor: "rgba(155, 48, 255, 0.4)", color: "#9B30FF" }}
+                >
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  {createPortalSession.isPending ? "..." : "MANAGE"}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => navigate("/pro")}
+                  className="font-primary text-xs tracking-wider text-white"
+                  style={{ background: "linear-gradient(135deg, #9B30FF, #6B0FCC)" }}
+                >
+                  <Crown className="w-3 h-3 mr-1" />
+                  UPGRADE
+                </Button>
+              )}
+            </div>
           </div>
         </FieldGroup>
 

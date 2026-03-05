@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Menu, LogIn, Share2 } from 'lucide-react';
+import { Heart, MessageCircle, Menu, LogIn, Share2, Coins, X, ShoppingBag, Crown, Megaphone, Shirt } from 'lucide-react';
 import { useLocation } from 'wouter';
 import StreamingPlayer from '@/components/StreamingPlayer';
 import { toast } from 'sonner';
@@ -12,8 +12,10 @@ import ShareModal from '@/components/ShareModal';
 import DailyBonusModal from '@/components/DailyBonusModal';
 import MissionGenerator from '@/components/MissionGenerator';
 import FoundingSlotsCounter from '@/components/FoundingSlotsCounter';
+import TipModal from '@/components/TipModal';
+import PredictionLimitBanner from '@/components/PredictionLimitBanner';
 import { trpc } from '@/lib/trpc';
-import { supabase, getAnonUserId } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
 import { Button } from '@/components/ui/button';
@@ -79,11 +81,12 @@ const StaticWaveform = () => (
 );
 
 // Track Card Component
-const TrackCard = ({ 
-  track, 
-  onPredictClick, 
+const TrackCard = ({
+  track,
+  onPredictClick,
   onCommentClick,
   onShareClick,
+  onTipClick,
   onLike,
   hasPredicted,
   isLiked,
@@ -174,11 +177,18 @@ const TrackCard = ({
             <span className="text-sm">{formatCount(track.commentsCount || 0)}</span>
           </button>
 
-          <button 
+          <button
             onClick={() => onShareClick(track)}
             className="flex items-center gap-2 text-gray-400 hover:text-orange-400 transition"
           >
             <Share2 className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={() => onTipClick(track)}
+            className="flex items-center gap-2 text-gray-400 hover:text-yellow-400 transition"
+          >
+            <Coins className="w-5 h-5" />
           </button>
         </div>
 
@@ -245,9 +255,11 @@ export default function Feed() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   
+  const [menuOpen, setMenuOpen] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<any>(null);
   const [commentTrack, setCommentTrack] = useState<any>(null);
   const [shareTrack, setShareTrack] = useState<any>(null);
+  const [tipTrack, setTipTrack] = useState<any>(null);
   const [dailyBonusData, setDailyBonusData] = useState<any>(null);
   const [showDailyBonus, setShowDailyBonus] = useState(false);
   const [userPredictions, setUserPredictions] = useState<Set<number>>(new Set());
@@ -267,23 +279,36 @@ export default function Feed() {
       .limit(20);
 
     if (!error && data) {
-      setTracks(
-        data.map((t: any) => ({
-          id: t.id,
-          artistName: t.artist_name || t.artist || "Unknown",
-          trackTitle: t.track_title || t.title || "Untitled",
-          artist_image: t.artist_image || t.cover_url,
-          cover_art: t.cover_url || t.cover_art,
-          streamingLink: t.streaming_link || t.audio_url,
-          genre: t.genre,
-          likes: t.like_count || 0,
-          commentsCount: t.comment_count || 0,
-          avgHookStrength: t.avg_hook,
-          avgOriginality: t.avg_originality,
-          avgProductionQuality: t.avg_production,
-          totalCertifications: t.rating_count || 0,
-        }))
-      );
+      const mapped = data.map((t: any) => ({
+        id: t.id,
+        artistName: t.artist_name || t.artist || "Unknown",
+        trackTitle: t.track_title || t.title || "Untitled",
+        artist_image: t.artist_image || t.cover_url,
+        cover_art: t.cover_url || t.cover_art,
+        streamingLink: t.streaming_link || t.audio_url,
+        genre: t.genre,
+        likes: t.like_count || 0,
+        commentsCount: t.comment_count || 0,
+        avgHookStrength: t.avg_hook,
+        avgOriginality: t.avg_originality,
+        avgProductionQuality: t.avg_production,
+        totalCertifications: t.rating_count || 0,
+        isFeatured: t.is_featured || false,
+        featuredUntil: t.featured_until || null,
+        userId: t.user_id || null,
+      }));
+
+      // Sort featured tracks first (with valid featuredUntil)
+      const now = new Date();
+      mapped.sort((a: any, b: any) => {
+        const aFeatured = a.isFeatured && a.featuredUntil && new Date(a.featuredUntil) > now;
+        const bFeatured = b.isFeatured && b.featuredUntil && new Date(b.featuredUntil) > now;
+        if (aFeatured && !bFeatured) return -1;
+        if (!aFeatured && bFeatured) return 1;
+        return 0;
+      });
+
+      setTracks(mapped);
     }
     setTracksLoading(false);
   };
@@ -332,6 +357,14 @@ export default function Feed() {
     setShareTrack(track);
   };
 
+  const handleTipClick = (track: any) => {
+    if (!isAuthenticated) {
+      toast.error("Please sign in to tip artists");
+      return;
+    }
+    setTipTrack(track);
+  };
+
   const handleLike = async (trackId: number) => {
     if (!isAuthenticated) {
       toast.error('Please sign in to like tracks');
@@ -356,44 +389,53 @@ export default function Feed() {
     toast.success(isCurrentlyLiked ? "Removed like" : "Liked!");
   };
 
+  const createPrediction = trpc.predictions.create.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        toast.success("Prediction locked! +5 FT earned");
+        refetchProfile();
+        fetchTracks();
+      } else if (data?.error === "prediction_limit_reached") {
+        toast.error(data.message || "Daily prediction limit reached. Upgrade to Pro!");
+      } else if (data?.error === "already_predicted") {
+        toast.error("You already certified this track");
+      }
+    },
+    onError: () => toast.error("Failed to submit prediction"),
+  });
+
   const handlePredictionSubmit = async (trackId: number, scores: any) => {
     if (!isAuthenticated) {
-      toast.error('Please sign in to certify tracks');
+      toast.error("Please sign in to certify tracks");
       return;
     }
 
-    // Save rating to Supabase (unified with Listen.tsx rating system)
-    const userId = user?.id?.toString() || getAnonUserId();
-    const { error } = await supabase.from("ratings").upsert(
-      {
-        track_id: trackId,
-        user_id: userId,
-        rating: Math.max(
-          1,
-          Math.min(
-            5,
-            Math.round(
-              (scores.hookStrength +
-                scores.originality +
-                scores.productionQuality +
-                (scores.vibe ?? 50)) /
-                80
-            )
-          )
-        ),
-        hook_strength: scores.hookStrength,
-        production_quality: scores.productionQuality,
-        originality: scores.originality,
-        vibe: scores.vibe ?? 50,
-      },
-      { onConflict: "track_id,user_id" }
-    );
+    createPrediction.mutate({
+      submissionId: trackId,
+      hookStrength: scores.hookStrength,
+      originality: scores.originality,
+      productionQuality: scores.productionQuality,
+      vibe: scores.vibe ?? 50,
+      engagementBonus: scores.engagementBonus ?? false,
+    });
 
-    if (error) {
-      toast.error("Failed to submit prediction");
-    } else {
-      toast.success("Prediction locked! +5 FT earned");
-      fetchTracks();
+    // Also sync to Supabase ratings for Listen.tsx compatibility
+    const userId = user?.id?.toString();
+    if (userId) {
+      supabase.from("ratings").upsert(
+        {
+          track_id: trackId,
+          user_id: userId,
+          rating: Math.max(1, Math.min(5, Math.round(
+            (scores.hookStrength + scores.originality + scores.productionQuality + (scores.vibe ?? 50)) / 80
+          ))),
+          hook_strength: scores.hookStrength,
+          production_quality: scores.productionQuality,
+          originality: scores.originality,
+          vibe: scores.vibe ?? 50,
+        },
+        { onConflict: "track_id,user_id" }
+      );
     }
 
     setUserPredictions(prev => new Set(prev).add(trackId));
@@ -413,9 +455,33 @@ export default function Feed() {
         className="sticky top-0 z-40 p-4 flex items-center justify-between"
         style={{ background: colors.gray900 }}
       >
-        <button className="p-2 -ml-2">
-          <Menu className="w-6 h-6 text-gray-400" />
-        </button>
+        <div className="relative">
+          <button className="p-2 -ml-2" onClick={() => setMenuOpen(v => !v)}>
+            {menuOpen ? <X className="w-6 h-6 text-gray-400" /> : <Menu className="w-6 h-6 text-gray-400" />}
+          </button>
+          {menuOpen && (
+            <div
+              className="absolute top-full left-0 mt-2 w-48 rounded-xl py-2 z-50"
+              style={{ background: colors.gray800, border: `1px solid ${colors.gray700}`, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+            >
+              {[
+                { label: "Token Shop", icon: ShoppingBag, href: "/shop" },
+                { label: "Go Pro", icon: Crown, href: "/pro" },
+                { label: "Promote Tracks", icon: Megaphone, href: "/promote" },
+                { label: "Merch", icon: Shirt, href: "/merch" },
+              ].map(item => (
+                <button
+                  key={item.href}
+                  onClick={() => { setMenuOpen(false); setLocation(item.href); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition"
+                >
+                  <item.icon className="w-4 h-4 text-orange-400" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-col items-center">
           <img 
@@ -436,9 +502,9 @@ export default function Feed() {
 
         <div className="flex items-center gap-2">
           {isAuthenticated ? (
-            <TokenBadge 
-              balance={tokenBalance} 
-              onClick={() => setLocation('/rewards')}
+            <TokenBadge
+              balance={tokenBalance}
+              onClick={() => setLocation('/shop')}
             />
           ) : (
             <a href={getLoginUrl()}>
@@ -469,6 +535,9 @@ export default function Feed() {
           <LoginPrompt />
         )}
 
+        {/* Prediction Limit Banner */}
+        {isAuthenticated && <PredictionLimitBanner />}
+
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full" />
@@ -476,12 +545,13 @@ export default function Feed() {
         ) : tracks && tracks.length > 0 ? (
           <div>
             {tracks.map((track: any) => (
-              <TrackCard 
-                key={track.id} 
-                track={track} 
+              <TrackCard
+                key={track.id}
+                track={track}
                 onPredictClick={handlePredictClick}
                 onCommentClick={handleCommentClick}
                 onShareClick={handleShareClick}
+                onTipClick={handleTipClick}
                 onLike={handleLike}
                 hasPredicted={userPredictions.has(track.id)}
                 isLiked={userLikes.has(track.id)}
@@ -533,6 +603,20 @@ export default function Feed() {
             originality: shareTrack.avgOriginality,
             productionQuality: shareTrack.avgProductionQuality,
             totalCertifications: shareTrack.totalCertifications,
+          }}
+        />
+      )}
+
+      {/* Tip Modal */}
+      {tipTrack && (
+        <TipModal
+          isOpen={!!tipTrack}
+          onClose={() => setTipTrack(null)}
+          track={{
+            id: tipTrack.id,
+            artistName: tipTrack.artistName,
+            trackTitle: tipTrack.trackTitle,
+            userId: tipTrack.userId,
           }}
         />
       )}
