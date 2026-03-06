@@ -242,7 +242,7 @@ export const submissionsRouter = router({
 export const predictionsRouter = router({
   create: protectedProcedure
     .input(z.object({
-      submissionId: z.number(),
+      submissionId: z.union([z.number(), z.string()]).transform(String),
       hookStrength: z.number().min(0).max(100),
       originality: z.number().min(0).max(100),
       productionQuality: z.number().min(0).max(100),
@@ -293,12 +293,13 @@ export const predictionsRouter = router({
           description = 'Certified a track + 17s engagement bonus';
         }
 
+        const numericRef = Number(input.submissionId);
         await db.awardTokens(
           ctx.user.id,
           totalAward,
           'prediction',
           description,
-          input.submissionId
+          isNaN(numericRef) ? undefined : numericRef
         );
       }
 
@@ -306,7 +307,7 @@ export const predictionsRouter = router({
     }),
 
   check: protectedProcedure
-    .input(z.object({ submissionId: z.number() }))
+    .input(z.object({ submissionId: z.union([z.number(), z.string()]).transform(String) }))
     .query(async ({ ctx, input }) => {
       const prediction = await db.getUserPredictionForSubmission(ctx.user.id, input.submissionId);
       return { hasPredicted: !!prediction, prediction };

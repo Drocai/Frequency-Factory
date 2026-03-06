@@ -453,20 +453,24 @@ export async function createPrediction(prediction: InsertPrediction) {
   const avgProduction = Math.round(allPredictions.reduce((sum, p) => sum + p.productionQuality, 0) / allPredictions.length);
   const avgVibe = Math.round(allPredictions.reduce((sum, p) => sum + (p.vibe || 50), 0) / allPredictions.length);
 
-  await db.update(submissions)
-    .set({
-      avgHookStrength: avgHook,
-      avgOriginality,
-      avgProductionQuality: avgProduction,
-      avgVibe,
-      totalCertifications: allPredictions.length,
-    })
-    .where(eq(submissions.id, prediction.submissionId));
+  // Only update MySQL submission metrics if submissionId is a numeric MySQL ID
+  const numericId = Number(prediction.submissionId);
+  if (!isNaN(numericId) && numericId > 0) {
+    await db.update(submissions)
+      .set({
+        avgHookStrength: avgHook,
+        avgOriginality,
+        avgProductionQuality: avgProduction,
+        avgVibe,
+        totalCertifications: allPredictions.length,
+      })
+      .where(eq(submissions.id, numericId));
+  }
 
   return { id: Number(result[0].insertId) };
 }
 
-export async function getUserPredictionForSubmission(userId: number, submissionId: number) {
+export async function getUserPredictionForSubmission(userId: number, submissionId: number | string) {
   const db = await getDb();
   if (!db) return null;
 
@@ -474,7 +478,7 @@ export async function getUserPredictionForSubmission(userId: number, submissionI
     .from(predictions)
     .where(and(
       eq(predictions.userId, userId),
-      eq(predictions.submissionId, submissionId)
+      eq(predictions.submissionId, String(submissionId))
     ))
     .limit(1);
 
@@ -654,7 +658,7 @@ export async function deleteSubmission(id: number) {
 
   // Delete related records first
   await db.delete(comments).where(eq(comments.submissionId, id));
-  await db.delete(predictions).where(eq(predictions.submissionId, id));
+  await db.delete(predictions).where(eq(predictions.submissionId, String(id)));
   await db.delete(likes).where(eq(likes.submissionId, id));
   
   // Delete the submission

@@ -155,7 +155,7 @@ export type InsertSubmission = typeof submissions.$inferInsert;
 export const predictions = mysqlTable("predictions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  submissionId: int("submissionId").notNull(),
+  submissionId: varchar("submissionId", { length: 128 }).notNull(),
   hookStrength: int("hookStrength").notNull(),
   originality: int("originality").notNull(),
   productionQuality: int("productionQuality").notNull(),
